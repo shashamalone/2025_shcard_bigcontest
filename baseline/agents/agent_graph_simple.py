@@ -173,7 +173,7 @@ def should_continue(state: MarketingState):
         return END
 
 
-# 워크플로우 그래프 생성
+# 워크플로우 그래프 생성 -> Node 함수 스텁
 def create_marketing_workflow():
     """마케팅 MultiAgent 워크플로우 생성"""
     workflow = StateGraph(MarketingState)
