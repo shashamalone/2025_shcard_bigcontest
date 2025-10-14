@@ -11,6 +11,7 @@ from .context_agent import context_agent_node
 from .situation_agent import situation_agent_node
 from .resource_agent import resource_agent_node
 from .evaluation_agent import evaluation_agent_node
+from .store_resolver_agent import store_resolver_node
 
 
 class AgentState(TypedDict):
@@ -18,19 +19,26 @@ class AgentState(TypedDict):
     user_query: str
     intent: str
     constraints: dict
-    
+
+    # Store Resolution 결과 (최상위 노드)
+    resolved_stores: list[dict]  # 중복 제거된 가맹점 리스트
+    store_ids: list[str]  # 가맹점구분번호 리스트
+    primary_store_id: str | None  # 주 대상 가맹점
+    store_search_query: str | None  # 검색에 사용된 쿼리
+    store_verification_status: str | None  # confirmed, multiple_found, failed
+
     # 데이터 수집 결과
     context_json: dict | None
     situation_json: dict | None
     resource_json: dict | None
-    
+
     # 전략 생성 결과
     strategy_cards: list[dict]
-    
+
     # 평가 결과
     eval_report: dict | None
     batch_eval_result: dict | None
-    
+
     # 로그 - 병렬 처리를 위해 Annotated 사용
     logs: Annotated[list[str], operator.add]
 
@@ -38,41 +46,46 @@ class AgentState(TypedDict):
 def build_graph():
     """
     LangGraph 조립
-    
+
     흐름:
-    1. strategy_supervisor (엔트리)
-    2. context_agent, situation_agent, resource_agent (병렬)
-    3. merge_supervisor (데이터 통합 및 전략 생성)
-    4. evaluation_agent (전략 평가)
-    5. END
+    1. store_resolver (엔트리) - FastMCP 기반 가맹점 검색 및 중복 해소
+    2. strategy_supervisor - 의도 분석
+    3. context_agent, situation_agent, resource_agent (병렬)
+    4. merge_supervisor (데이터 통합 및 전략 생성)
+    5. evaluation_agent (전략 평가)
+    6. END
     """
     g = StateGraph(AgentState)
-    
+
     # 노드 등록
+    g.add_node("store_resolver", store_resolver_node)
     g.add_node("strategy_supervisor", strategy_supervisor_node)
     g.add_node("context_agent", context_agent_node)
     g.add_node("situation_agent", situation_agent_node)
     g.add_node("resource_agent", resource_agent_node)
     g.add_node("merge_supervisor", merge_supervisor_node)
     g.add_node("evaluation_agent", evaluation_agent_node)
-    
-    # 엔트리 포인트
-    g.set_entry_point("strategy_supervisor")
-    
+
+    # 엔트리 포인트: store_resolver가 최상위 노드
+    g.set_entry_point("store_resolver")
+
+    # store_resolver → strategy_supervisor
+    g.add_edge("store_resolver", "strategy_supervisor")
+
     # 병렬 실행: 3개 에이전트 동시 실행
     g.add_edge("strategy_supervisor", "context_agent")
     g.add_edge("strategy_supervisor", "situation_agent")
     g.add_edge("strategy_supervisor", "resource_agent")
-    
+
     # 병렬 완료 후 merge로 수렴
     g.add_edge("context_agent", "merge_supervisor")
     g.add_edge("situation_agent", "merge_supervisor")
     g.add_edge("resource_agent", "merge_supervisor")
-    
+
     # 평가 및 종료
     g.add_edge("merge_supervisor", "evaluation_agent")
     g.add_edge("evaluation_agent", END)
-    
+
     return g.compile()
 
 

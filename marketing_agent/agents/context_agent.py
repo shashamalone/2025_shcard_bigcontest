@@ -16,17 +16,17 @@ def context_agent_node(state):
     - 위험 평가
     """
     logger.info("Context Agent: 시작")
-    state.logs.append(f"[{datetime.now()}] context_agent: 컨텍스트 생성 시작")
     
     # 실제로는 DB 쿼리 + 계산
     context_json = _build_context_json(state)
     
-    state.context_json = context_json.dict()
-    state.logs.append(f"[{datetime.now()}] context_agent: 완료 (버전: {context_json.provenance.version})")
-    
     logger.info("Context Agent: 완료")
     
-    return state
+    # 상태 업데이트할 내용만 반환
+    return {
+        "context_json": context_json.dict(),
+        "logs": [f"[{datetime.now()}] context_agent: 컨텍스트 생성 완료 (버전: {context_json.provenance.version})"]
+    }
 
 
 def _build_context_json(state) -> ContextJSON:
@@ -40,16 +40,18 @@ def _build_context_json(state) -> ContextJSON:
         FootTrafficProxy
     )
     
+    constraints = state.get("constraints", {})
+    
     context = ContextJSON(
         store=Store(
-            id=state.constraints.get("store_id", "S123"),
+            id=constraints.get("store_id", "S123"),
             name="테스트 카페",
             industry_code="CAFE",
             market_id="M45"
         ),
         period=Period(
-            start=state.constraints.get("start_date", "2025-09-01"),
-            end=state.constraints.get("end_date", "2025-09-30")
+            start=constraints.get("start_date", "2025-09-01"),
+            end=constraints.get("end_date", "2025-09-30")
         ),
         metrics=Metrics(
             kpi=KPI(
@@ -100,9 +102,9 @@ def _build_context_json(state) -> ContextJSON:
             ]
         ),
         session_constraints=SessionConstraints(
-            budget_krw=state.constraints.get("budget_krw", 50000),
-            budget_tier=state.constraints.get("budget_tier", "low"),
-            preferred_channels=state.constraints.get("preferred_channels", ["kakao", "instagram"]),
+            budget_krw=constraints.get("budget_krw", 50000),
+            budget_tier=constraints.get("budget_tier", "low"),
+            preferred_channels=constraints.get("preferred_channels", ["kakao", "instagram"]),
             forbidden_channels=[],
             brand_tone="friendly"
         ),

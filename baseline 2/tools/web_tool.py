@@ -1,99 +1,182 @@
+"""
+Web Search Tool
+Tavily API 래퍼
+"""
 import os
-from langchain.tools import tool
-from langchain_community.tools.tavily_search import TavilySearchResults
+from typing import List, Dict
+from loguru import logger
+
+try:
+    from tavily import TavilyClient
+except ImportError:
+    logger.warning("tavily-python 미설치")
+    TavilyClient = None
 
 
-# Tavily 검색 초기화
-tavily_search = TavilySearchResults(
-    max_results=5,
-    include_answer=True
-) if os.getenv("TAVILY_API_KEY") else None
-
-
-@tool
-def get_weather_info(location: str) -> dict:
-    """날씨 정보 조회 도구
-    
-    Args:
-        location: 지역명
-        
-    Returns:
-        날씨 정보 딕셔너리
+class WebSearchTool:
     """
-    # 실제 구현 시 기상청 API 연동
-    return {
-        "location": location,
-        "condition": "맑음",
-        "temp": 15,
-        "humidity": 60,
-        "precipitation": 0,
-        "forecast_3days": [
-            {"day": "today", "condition": "맑음", "temp_high": 18, "temp_low": 10},
-            {"day": "tomorrow", "condition": "흐림", "temp_high": 16, "temp_low": 9},
-            {"day": "day_after", "condition": "비", "temp_high": 14, "temp_low": 8}
-        ]
-    }
-
-
-@tool
-def get_local_events(location: str) -> dict:
-    """지역 이벤트 정보 조회 도구
-    
-    Args:
-        location: 지역명
-        
-    Returns:
-        이벤트 정보 딕셔너리
+    Tavily 기반 웹 검색 도구
     """
-    # 실제 구현 시 공공데이터 API 연동
-    return {
-        "location": location,
-        "events": [
-            {
-                "name": "강남 페스티벌",
-                "date": "2025-10-15",
-                "type": "문화행사",
-                "expected_visitors": 5000
-            }
-        ],
-        "opportunity": True,
-        "recommendation": "행사 기간 특별 메뉴 출시 권장"
-    }
-
-
-@tool
-def search_marketing_trends(query: str) -> str:
-    """마케팅 트렌드 검색 도구 (Tavily 활용)
     
-    Args:
-        query: 검색 쿼리
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key or os.getenv("TAVILY_API_KEY")
         
-    Returns:
-        검색 결과 문자열
+        if self.api_key and TavilyClient:
+            self.client = TavilyClient(api_key=self.api_key)
+            logger.info("Tavily 클라이언트 초기화 완료")
+        else:
+            logger.warning("TAVILY_API_KEY 없음 또는 라이브러리 미설치")
+            self.client = None
+    
+    def search(
+        self,
+        query: str,
+        max_results: int = 5,
+        search_depth: str = "basic",
+        include_domains: List[str] = None,
+        exclude_domains: List[str] = None
+    ) -> List[Dict]:
+        """
+        웹 검색
+        
+        Args:
+            query: 검색 쿼리
+            max_results: 최대 결과 수
+            search_depth: "basic" | "advanced"
+            include_domains: 포함할 도메인
+            exclude_domains: 제외할 도메인
+        
+        Returns:
+            [{"title": "...", "url": "...", "content": "...", "score": 0.95}, ...]
+        """
+        if not self.client:
+            logger.warning("Tavily 클라이언트 없음")
+            return []
+        
+        try:
+            response = self.client.search(
+                query=query,
+                max_results=max_results,
+                search_depth=search_depth,
+                include_domains=include_domains,
+                exclude_domains=exclude_domains
+            )
+            
+            results = []
+            for result in response.get("results", []):
+                results.append({
+                    "title": result.get("title", ""),
+                    "url": result.get("url", ""),
+                    "content": result.get("content", ""),
+                    "score": result.get("score", 0.0)
+                })
+            
+            logger.info(f"검색 완료: {query} → {len(results)}개 결과")
+            return results
+            
+        except Exception as e:
+            logger.error(f"검색 실패: {e}")
+            return []
+    
+    def search_events(
+        self,
+        location: str,
+        date_range: str = None,
+        max_results: int = 3
+    ) -> List[Dict]:
+        """
+        행사 정보 검색
+        
+        Args:
+            location: 지역명 (예: "성수동", "서울")
+            date_range: 날짜 범위 (예: "이번 주", "11월")
+            max_results: 최대 결과 수
+        
+        Returns:
+            행사 정보 리스트
+        """
+        query = f"{location} 행사 이벤트 축제"
+        if date_range:
+            query += f" {date_range}"
+        
+        results = self.search(
+            query=query,
+            max_results=max_results,
+            search_depth="basic"
+        )
+        
+        # 행사 정보 파싱 (실제로는 더 정교한 파싱 필요)
+        events = []
+        for r in results:
+            events.append({
+                "title": r["title"],
+                "location": location,
+                "url": r["url"],
+                "description": r["content"][:200],
+                "source": "web"
+            })
+        
+        return events
+
+
+class WeatherTool:
     """
-    if not tavily_search:
-        return "Tavily API 키가 설정되지 않았습니다."
+    날씨 정보 도구 (예시)
+    실제로는 기상청 API 연동
+    """
     
-    try:
-        results = tavily_search.invoke({"query": query})
-        
-        if not results:
-            return "검색 결과가 없습니다."
-        
-        output = []
-        for i, result in enumerate(results[:3], 1):
-            content = result.get("content", "내용 없음")
-            url = result.get("url", "")
-            output.append(f"[{i}] {content[:150]}...\n출처: {url}")
-        
-        return "\n\n".join(output)
+    def __init__(self):
+        logger.info("WeatherTool 초기화")
     
-    except Exception as e:
-        return f"검색 오류: {str(e)}"
+    def get_forecast(
+        self,
+        location: str,
+        days: int = 7
+    ) -> Dict:
+        """
+        날씨 예보 조회
+        
+        Args:
+            location: 지역명
+            days: 예보 일수
+        
+        Returns:
+            날씨 예보 데이터
+        """
+        # 더미 데이터 (실제로는 API 호출)
+        logger.info(f"날씨 조회: {location}, {days}일")
+        
+        return {
+            "location": location,
+            "forecast": [
+                {
+                    "date": "2025-11-10",
+                    "temp_max": 15,
+                    "temp_min": 8,
+                    "pop": 0.7,
+                    "rain_mm": 18.0,
+                    "description": "흐리고 비"
+                }
+            ]
+        }
 
 
-web_tools = [
-    get_weather_info,
-    get_local_events,
-    search_marketing_trends
-]
+# 싱글톤 인스턴스
+_web_tool_instance = None
+_weather_tool_instance = None
+
+
+def get_web_tool() -> WebSearchTool:
+    """웹 검색 도구 인스턴스"""
+    global _web_tool_instance
+    if _web_tool_instance is None:
+        _web_tool_instance = WebSearchTool()
+    return _web_tool_instance
+
+
+def get_weather_tool() -> WeatherTool:
+    """날씨 도구 인스턴스"""
+    global _weather_tool_instance
+    if _weather_tool_instance is None:
+        _weather_tool_instance = WeatherTool()
+    return _weather_tool_instance

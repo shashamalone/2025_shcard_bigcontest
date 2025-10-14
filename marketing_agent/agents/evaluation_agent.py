@@ -17,21 +17,23 @@ def evaluation_agent_node(state):
     - 수정 권고 생성
     """
     logger.info("Evaluation Agent: 시작")
-    state.logs.append(f"[{datetime.now()}] evaluation_agent: 평가 시작")
     
-    if not state.strategy_cards:
+    strategy_cards = state.get("strategy_cards", [])
+    
+    if not strategy_cards:
         logger.warning("평가할 전략 카드 없음")
-        state.logs.append("[WARNING] 전략 카드 없음")
-        return state
+        return {
+            "logs": ["[WARNING] 전략 카드 없음"]
+        }
     
     eval_report = _evaluate_strategy_cards(state)
     
-    state.eval_report = eval_report.dict()
-    state.logs.append(f"[{datetime.now()}] evaluation_agent: 완료 (심각도: {eval_report.severity})")
-    
     logger.info(f"Evaluation Agent: 완료 (심각도: {eval_report.severity})")
     
-    return state
+    return {
+        "eval_report": eval_report.dict(),
+        "logs": [f"[{datetime.now()}] evaluation_agent: 평가 완료 (심각도: {eval_report.severity})"]
+    }
 
 
 def _evaluate_strategy_cards(state) -> EvaluationReport:
@@ -39,8 +41,9 @@ def _evaluate_strategy_cards(state) -> EvaluationReport:
     전략 카드 평가
     """
     checks = []
+    strategy_cards = state.get("strategy_cards", [])
     
-    for idx, card in enumerate(state.strategy_cards):
+    for idx, card in enumerate(strategy_cards):
         check = _evaluate_single_card(idx, card, state)
         checks.append(check)
     
@@ -70,11 +73,14 @@ def _evaluate_single_card(idx: int, card: dict, state) -> CardCheck:
     risk_notes = []
     fix_suggestion = None
     
+    constraints = state.get("constraints", {})
+    context_json = state.get("context_json", {})
+    
     # 1. 제약 조건 검증
-    constraint_fit = _check_constraints(card, state.constraints, risk_notes)
+    constraint_fit = _check_constraints(card, constraints, risk_notes)
     
     # 2. 근거 매칭 검증
-    evidence_match = _check_evidence(card, state.context_json, risk_notes)
+    evidence_match = _check_evidence(card, context_json, risk_notes)
     
     # 3. 수정 제안 생성
     if not constraint_fit or risk_notes:

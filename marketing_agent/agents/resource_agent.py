@@ -16,16 +16,15 @@ def resource_agent_node(state):
     - 실행 체크리스트 생성
     """
     logger.info("Resource Agent: 시작")
-    state.logs.append(f"[{datetime.now()}] resource_agent: 리소스 매칭 시작")
     
     resource_json = _build_resource_json(state)
     
-    state.resource_json = resource_json.dict()
-    state.logs.append(f"[{datetime.now()}] resource_agent: 완료")
-    
     logger.info("Resource Agent: 완료")
     
-    return state
+    return {
+        "resource_json": resource_json.dict(),
+        "logs": [f"[{datetime.now()}] resource_agent: 리소스 매칭 완료"]
+    }
 
 
 def _build_resource_json(state) -> ResourceJSON:
@@ -34,9 +33,10 @@ def _build_resource_json(state) -> ResourceJSON:
     - 예산에 맞는 패키지 선택
     - 실행 가능한 체크리스트 구성
     """
-    budget_krw = state.constraints.get("budget_krw", 50000)
+    constraints = state.get("constraints", {})
+    budget_krw = constraints.get("budget_krw", 50000)
     budget_tier = _determine_budget_tier(budget_krw)
-    preferred_channels = state.constraints.get("preferred_channels", ["kakao"])
+    preferred_channels = constraints.get("preferred_channels", ["kakao"])
     primary_channel = preferred_channels[0] if preferred_channels else "kakao"
     
     # 패키지 매칭

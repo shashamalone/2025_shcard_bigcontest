@@ -1,296 +1,302 @@
+"""
+Marketing Multi-Agent System
+Streamlit 메인 애플리케이션
+"""
 import streamlit as st
-import os
-from dotenv import load_dotenv
-from agents.graph import run_marketing_agent
+from datetime import datetime, timedelta
+from loguru import logger
+import sys
 
-# 환경 변수 로드
-load_dotenv()
+# 로깅 설정
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
-# 페이지 설정
-st.set_page_config(
-    page_title="마케팅 AI 어시스턴트",
-    page_icon="🎯",
-    layout="wide"
-)
+from agents import marketing_graph, AgentState
 
-# 제목
-st.title("🎯 소상공인 마케팅 MultiAgent 시스템")
-st.markdown("LangGraph 기반 지능형 마케팅 전략 생성")
-st.markdown("---")
 
-# 사이드바
-with st.sidebar:
-    st.header("⚙️ API 설정")
+def main():
+    """메인 애플리케이션"""
     
-    # API 키 확인
-    gemini_key = os.getenv("GOOGLE_API_KEY")
-    tavily_key = os.getenv("TAVILY_API_KEY")
-    pinecone_key = os.getenv("PINECONE_API_KEY")
-    
-    if gemini_key:
-        st.success("✅ Gemini API 연결됨")
-    else:
-        st.error("❌ Gemini API 키 필요")
-    
-    if tavily_key:
-        st.success("✅ Tavily API 연결됨")
-    else:
-        st.warning("⚠️ Tavily API 키 권장")
-    
-    if pinecone_key:
-        st.success("✅ Pinecone 연결됨")
-    else:
-        st.warning("⚠️ Pinecone 키 권장")
-    
-    st.markdown("---")
-    st.markdown("""
-    ### 🔄 Agent 흐름
-    
-    **strategy_supervisor**
-    ↓
-    **{context, situation, resource}** (병렬)
-    ↓
-    **merge_supervisor**
-    ↓
-    **evaluation_agent**
-    ↓
-    **END**
-    """)
-    
-    st.markdown("---")
-    st.markdown("""
-    ### 📋 사전 질문 예시
-    
-    1. 카페 - 고객 특성별 채널 추천
-    2. 재방문율 30% 이하 - 개선 방안
-    3. 요식업 - 문제점 진단
-    4. 상권 특화 - 이벤트/날씨 활용
-    """)
-
-# 메인 컨텐츠
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.header("📝 비즈니스 정보")
-    
-    business_name = st.text_input(
-        "가맹점명",
-        placeholder="예: 강남 카페",
-        help="비공개 가능"
+    st.set_page_config(
+        page_title="마케팅 Multi-Agent",
+        page_icon="🎯",
+        layout="wide"
     )
     
-    business_type = st.selectbox(
-        "업종",
-        ["카페", "요식업", "소매업", "서비스업", "온라인몰"]
-    )
+    st.title("🎯 마케팅 전략 생성 시스템")
+    st.caption("Multi-Agent 기반 데이터 중심 전략 수립")
     
+    # 사이드바: 설정
+    with st.sidebar:
+        st.header("⚙️ 설정")
+        
+        # 점포 선택
+        store_id = st.text_input("점포 ID", value="S123", help="분석할 점포 ID")
+        
+        # 기간 선택
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input(
+                "시작일",
+                value=datetime.now() - timedelta(days=30)
+            )
+        with col2:
+            end_date = st.date_input(
+                "종료일",
+                value=datetime.now()
+            )
+        
+        # 예산
+        budget_krw = st.number_input(
+            "예산 (원)",
+            min_value=0,
+            max_value=10000000,
+            value=50000,
+            step=10000
+        )
+        
+        # 채널
+        preferred_channels = st.multiselect(
+            "선호 채널",
+            options=["kakao", "instagram", "facebook", "naver", "blog"],
+            default=["kakao", "instagram"]
+        )
+        
+        st.divider()
+        
+        # 실행 버튼
+        run_button = st.button("🚀 전략 생성", type="primary", use_container_width=True)
+    
+    # 메인 영역: 쿼리 입력
+    st.header("💬 전략 요청")
     user_query = st.text_area(
-        "마케팅 질문",
-        placeholder="예: 평일 매출을 늘리고 싶어요\n재방문율을 높이는 방법을 알려주세요",
-        height=120,
-        help="구체적일수록 정확한 답변을 받을 수 있습니다"
-    )
-
-with col2:
-    st.header("🎯 제약 조건")
-    
-    budget = st.selectbox(
-        "월 마케팅 예산",
-        ["5만원 미만", "5-10만원", "10-20만원", "20만원 이상"]
+        "무엇을 도와드릴까요?",
+        value="평일 점심 매출을 늘리고 싶어. 예산 5만원, 인스타로.",
+        height=100,
+        help="자연어로 전략 요청을 입력하세요"
     )
     
-    budget_map = {
-        "5만원 미만": 50000,
-        "5-10만원": 100000,
-        "10-20만원": 200000,
-        "20만원 이상": 500000
-    }
-    
-    channels = st.multiselect(
-        "선호 채널",
-        ["Instagram", "네이버 블로그", "카카오톡", "Facebook", "YouTube"],
-        default=["Instagram"]
-    )
-    
-    duration = st.selectbox(
-        "실행 기간",
-        ["1주", "2주", "1개월", "3개월"]
-    )
-    
-    duration_map = {
-        "1주": 1,
-        "2주": 2,
-        "1개월": 4,
-        "3개월": 12
-    }
-
-# 실행 버튼
-st.markdown("---")
-col_btn = st.columns([1, 2, 1])
-
-with col_btn[1]:
-    run_button = st.button(
-        "🚀 AI 전략 생성 시작",
-        type="primary",
-        use_container_width=True
-    )
-
-# 결과 표시
-if run_button:
-    if not user_query:
-        st.error("❌ 마케팅 질문을 입력해주세요!")
-    elif not gemini_key:
-        st.error("❌ Gemini API 키가 설정되지 않았습니다.")
-    else:
-        # 제약조건 구성
+    # 실행
+    if run_button and user_query:
+        
+        # 제약 조건 구성
         constraints = {
-            "budget_krw": budget_map[budget],
-            "channels": channels,
-            "duration_weeks": duration_map[duration]
+            "store_id": store_id,
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "budget_krw": budget_krw,
+            "budget_tier": _determine_budget_tier(budget_krw),
+            "preferred_channels": preferred_channels
         }
         
-        # 비즈니스 정보 추가
-        full_query = f"""
-비즈니스: {business_name} ({business_type})
-질문: {user_query}
-"""
+        # 초기 상태
+        initial_state = {
+            "user_query": user_query,
+            "intent": "strategy",
+            "constraints": constraints,
+            "context_json": None,
+            "situation_json": None,
+            "resource_json": None,
+            "strategy_cards": [],
+            "eval_report": None,
+            "batch_eval_result": None,
+            "logs": []
+        }
         
-        with st.spinner("🤖 MultiAgent 시스템이 전략을 생성 중입니다..."):
-            try:
-                # 에이전트 실행
-                result = run_marketing_agent(full_query, constraints)
-                
-                if result:
-                    st.session_state['result'] = result
-                    st.success("✅ 전략 생성 완료!")
-                    st.balloons()
+        # 진행 상황
+        with st.spinner("전략 생성 중..."):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
             
+            try:
+                # 그래프 실행
+                status_text.text("1/5 의도 분석 중...")
+                progress_bar.progress(20)
+                
+                final_state = marketing_graph.invoke(initial_state)
+                
+                progress_bar.progress(100)
+                status_text.text("✅ 완료!")
+                
+                # 결과 표시
+                _display_results(final_state)
+                
             except Exception as e:
-                st.error(f"❌ 오류: {str(e)}")
-                st.info("💡 API 키를 확인하거나 질문을 수정해보세요")
+                st.error(f"❌ 오류 발생: {e}")
+                logger.error(f"그래프 실행 오류: {e}", exc_info=True)
 
-# 결과 출력
-if 'result' in st.session_state:
-    result = st.session_state['result']
+
+def _determine_budget_tier(budget_krw: int) -> str:
+    """예산 등급 판단"""
+    if budget_krw < 100000:
+        return "low"
+    elif budget_krw < 500000:
+        return "med"
+    else:
+        return "high"
+
+
+def _display_results(state):
+    """결과 표시"""
     
-    st.markdown("---")
-    st.header("📊 생성된 마케팅 전략")
+    st.success("전략 생성이 완료되었습니다!")
     
     # 탭 구성
-    tabs = st.tabs([
-        "🎯 전략 카드",
-        "📈 컨텍스트 분석",
-        "🌤️ 상황 분석",
-        "💰 리소스 분석",
-        "✅ 평가 리포트",
-        "📝 실행 로그"
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 전략 카드",
+        "📈 컨텍스트",
+        "✅ 평가 결과",
+        "📝 로그"
     ])
     
     # 전략 카드
-    with tabs[0]:
-        st.subheader("🎯 최종 전략 카드")
+    with tab1:
+        st.header("생성된 전략")
         
-        if result.strategy_cards:
-            for idx, card in enumerate(result.strategy_cards):
-                with st.expander(f"전략 {idx+1}: {card.get('title', '제목없음')}", expanded=True):
-                    st.markdown(f"**유형:** {card.get('card_type', 'N/A')}")
+        strategy_cards = state.get("strategy_cards", [])
+        if strategy_cards:
+            for idx, card in enumerate(strategy_cards):
+                with st.expander(f"**전략 {idx+1}: {card.get('title', 'N/A')}**", expanded=True):
                     
-                    st.markdown("**📌 근거 (Why)**")
-                    for reason in card.get('why', []):
-                        st.markdown(f"- {reason}")
+                    col1, col2 = st.columns([2, 1])
                     
-                    st.markdown("**📋 실행 내용 (What)**")
-                    for item in card.get('what', []):
-                        st.markdown(f"- {item}")
+                    with col1:
+                        st.markdown(f"**가설**: {card.get('hypothesis', 'N/A')}")
+                        st.markdown(f"**타겟**: {card.get('target_segment', 'N/A')}")
+                        st.markdown(f"**제안**: {card.get('offer', 'N/A')}")
+                        
+                        st.markdown("**근거**:")
+                        for why in card.get("why", []):
+                            st.markdown(f"- {why}")
                     
-                    st.markdown("**🔧 실행 방법 (How)**")
-                    for step in card.get('how', []):
-                        st.markdown(f"- {step.get('step', 'N/A')} "
-                                  f"(담당: {step.get('owner', 'N/A')}, "
-                                  f"예상 시간: {step.get('eta_min', 0)}분)")
+                    with col2:
+                        budget = card.get("budget", {})
+                        st.metric("예산", f"{budget.get('cap', 0):,}원")
+                        
+                        timeline = card.get("timeline", {})
+                        st.metric("기간", f"{timeline.get('start', '')} ~ {timeline.get('end', '')}")
+                        
+                        kpi = card.get("kpi_targets", {}).get("primary", {})
+                        st.metric("목표 KPI", f"{kpi.get('metric', 'N/A')}: {kpi.get('target', 'N/A')}")
                     
-                    st.markdown("**📈 예상 효과**")
-                    effect = card.get('expected_effect', {})
-                    st.markdown(f"- KPI: {effect.get('kpi', 'N/A')}")
-                    st.markdown(f"- 예상 효과: {effect.get('lift_hypothesis', 'N/A')}")
+                    st.markdown("---")
+                    st.markdown("**채널**: " + ", ".join(card.get("channel_hints", [])))
+                    st.markdown("**위험**: " + " / ".join(card.get("risks", ["없음"])))
         else:
-            st.info("생성된 전략 카드가 없습니다.")
+            st.warning("생성된 전략이 없습니다.")
     
-    # 컨텍스트 분석
-    with tabs[1]:
-        st.subheader("📈 점포/상권 컨텍스트")
+    # 컨텍스트
+    with tab2:
+        st.header("점포/상권 컨텍스트")
         
-        if result.context_json:
-            st.json(result.context_json)
-        else:
-            st.info("컨텍스트 정보가 없습니다.")
-    
-    # 상황 분석
-    with tabs[2]:
-        st.subheader("🌤️ 날씨/이벤트 상황")
-        
-        if result.situation_json:
-            st.json(result.situation_json)
-        else:
-            st.info("상황 정보가 없습니다.")
-    
-    # 리소스 분석
-    with tabs[3]:
-        st.subheader("💰 예산/채널/도구")
-        
-        if result.resource_json:
-            st.json(result.resource_json)
-        else:
-            st.info("리소스 정보가 없습니다.")
-    
-    # 평가 리포트
-    with tabs[4]:
-        st.subheader("✅ 전략 평가 결과")
-        
-        if result.eval_report:
-            eval_report = result.eval_report
+        context_json = state.get("context_json")
+        if context_json:
+            ctx = context_json
             
-            # 요약
-            st.metric(
-                "전체 품질",
-                eval_report.get('overall_quality', 'N/A'),
-                f"{eval_report.get('pass_rate', 0)*100:.0f}% 적합"
-            )
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                sales = ctx.get("metrics", {}).get("kpi", {}).get("sales_sum", 0)
+                st.metric("총 매출", f"{sales:,.0f}원")
+            with col2:
+                visits = ctx.get("metrics", {}).get("kpi", {}).get("visits_sum", 0)
+                st.metric("총 방문", f"{visits:,}회")
+            with col3:
+                aov = ctx.get("metrics", {}).get("kpi", {}).get("aov", 0)
+                st.metric("객단가", f"{aov:,.0f}원")
+            with col4:
+                repeat = ctx.get("metrics", {}).get("kpi", {}).get("repeat_rate", 0)
+                st.metric("재방문율", f"{repeat:.1%}")
             
-            st.markdown(f"**요약:** {eval_report.get('summary', 'N/A')}")
+            st.markdown("---")
             
-            # 세부 검증
-            st.markdown("**세부 검증 결과:**")
-            for check in eval_report.get('checks', []):
-                status_emoji = "✅" if check.get('status') == 'PASS' else "❌"
-                st.markdown(f"{status_emoji} **{check.get('card_title', 'N/A')}**")
+            st.subheader("파생 지표")
+            derived = ctx.get("metrics", {}).get("derived", {})
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("경쟁강도", f"{derived.get('comp_intensity', 0):.2f}")
+                st.metric("런치비중", f"{derived.get('lunch_share', 0):.1%}")
+            with col2:
+                st.metric("주말편중", f"{derived.get('weekend_share', 0):.1%}")
+                st.metric("유동지수", f"{derived.get('foot_traffic_proxy', 0):.2f}")
+            with col3:
+                st.metric("업종대비", f"{derived.get('same_industry_sales_ratio', 0):.2f}")
+                st.metric("매출변동", f"{derived.get('sales_volatility_4w', 0):.2f}")
+            
+            st.markdown("---")
+            
+            st.subheader("위험 평가")
+            risk = ctx.get("risk", {})
+            st.metric("위험점수", f"{risk.get('score', 0):.2f}")
+            st.markdown(f"**유형**: {risk.get('typology', 'N/A')}")
+            st.markdown("**요인**: " + ", ".join(risk.get("reasons", [])))
+        else:
+            st.warning("컨텍스트 데이터가 없습니다.")
+    
+    # 평가 결과
+    with tab3:
+        st.header("전략 평가")
+        
+        eval_report = state.get("eval_report")
+        if eval_report:
+            report = eval_report
+            
+            severity_color = {
+                "low": "🟢",
+                "medium": "🟡",
+                "high": "🔴"
+            }
+            
+            st.markdown(f"**요약**: {report.get('summary', 'N/A')}")
+            st.markdown(f"**심각도**: {severity_color.get(report.get('severity'), '⚪')} {report.get('severity', 'N/A')}")
+            
+            st.markdown("---")
+            
+            checks = report.get("checks", [])
+            for check in checks:
+                card_idx = check.get("card_idx", 0)
                 
-                if check.get('issues'):
-                    for issue in check['issues']:
-                        st.markdown(f"  - ⚠️ {issue}")
+                with st.expander(f"카드 {card_idx + 1} 검증 결과"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        constraint_fit = check.get("constraint_fit", False)
+                        st.markdown(f"**제약 부합**: {'✅' if constraint_fit else '❌'}")
+                    
+                    with col2:
+                        evidence_match = check.get("evidence_match", False)
+                        st.markdown(f"**근거 매칭**: {'✅' if evidence_match else '❌'}")
+                    
+                    risk_notes = check.get("risk_notes", [])
+                    if risk_notes:
+                        st.markdown("**위험 노트**:")
+                        for note in risk_notes:
+                            st.markdown(f"- {note}")
+                    
+                    fix_suggestion = check.get("fix_suggestion")
+                    if fix_suggestion:
+                        st.info(f"💡 수정 제안: {fix_suggestion}")
             
-            # 권고사항
-            if eval_report.get('recommendations'):
-                st.markdown("**개선 권고사항:**")
-                for rec in eval_report['recommendations']:
-                    st.warning(f"🔔 [{rec.get('priority', 'N/A')}] {rec.get('action', 'N/A')}")
+            st.markdown("---")
+            
+            st.subheader("권장 액션")
+            actions = report.get("recommended_actions", [])
+            for action in actions:
+                st.markdown(f"- **{action.get('action', 'N/A')}**: {action.get('impact', 'N/A')}")
         else:
-            st.info("평가 리포트가 없습니다.")
+            st.warning("평가 결과가 없습니다.")
     
-    # 실행 로그
-    with tabs[5]:
-        st.subheader("📝 Agent 실행 로그")
+    # 로그
+    with tab4:
+        st.header("실행 로그")
         
-        if result.logs:
-            for log in result.logs:
+        logs = state.get("logs", [])
+        if logs:
+            for log in logs:
                 st.text(log)
         else:
             st.info("로그가 없습니다.")
 
-# 푸터
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: gray;'>
-    <p>🤖 Powered by LangChain & LangGraph | Gemini 2.0 Flash | v2.0</p>
-</div>
-""", unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()

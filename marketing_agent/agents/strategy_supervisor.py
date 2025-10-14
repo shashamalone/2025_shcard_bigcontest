@@ -15,18 +15,23 @@ def strategy_supervisor_node(state):
     - 하위 에이전트 실행 준비
     """
     logger.info("Strategy Supervisor: 시작")
-    state.logs.append(f"[{datetime.now()}] strategy_supervisor: 의도 분석 시작")
     
     # Intent 분석 (실제로는 LLM 또는 규칙 기반 분석)
-    if "비교" in state.user_query or "순위" in state.user_query:
-        state.intent = "comparison"
+    user_query = state.get("user_query", "")
+    if "비교" in user_query or "순위" in user_query:
+        intent = "comparison"
     else:
-        state.intent = "strategy"
+        intent = "strategy"
     
-    logger.info(f"Intent detected: {state.intent}")
-    state.logs.append(f"[{datetime.now()}] intent: {state.intent}")
+    logger.info(f"Intent detected: {intent}")
     
-    return state
+    return {
+        "intent": intent,
+        "logs": [
+            f"[{datetime.now()}] strategy_supervisor: 의도 분석 시작",
+            f"[{datetime.now()}] intent: {intent}"
+        ]
+    }
 
 
 def merge_supervisor_node(state):
@@ -34,29 +39,32 @@ def merge_supervisor_node(state):
     병렬 수집 완료 후 데이터 통합 및 전략 카드 생성
     """
     logger.info("Merge Supervisor: 데이터 통합 시작")
-    state.logs.append(f"[{datetime.now()}] merge_supervisor: 3개 에이전트 결과 통합")
+    
+    logs = [f"[{datetime.now()}] merge_supervisor: 3개 에이전트 결과 통합"]
     
     # Context, Situation, Resource 검증
-    if not state.context_json:
+    if not state.get("context_json"):
         logger.warning("Context JSON 누락")
-        state.logs.append("[WARNING] context_json 누락")
+        logs.append("[WARNING] context_json 누락")
     
-    if not state.situation_json:
+    if not state.get("situation_json"):
         logger.info("Situation JSON 없음 (정상 케이스)")
     
-    if not state.resource_json:
+    if not state.get("resource_json"):
         logger.warning("Resource JSON 누락")
-        state.logs.append("[WARNING] resource_json 누락")
+        logs.append("[WARNING] resource_json 누락")
     
     # 전략 카드 생성 (실제로는 LLM 기반 생성)
     strategy_card = _generate_strategy_card(state)
     
-    state.strategy_cards.append(strategy_card.dict())
-    state.logs.append(f"[{datetime.now()}] 전략 카드 생성 완료: {strategy_card.title}")
+    logs.append(f"[{datetime.now()}] 전략 카드 생성 완료: {strategy_card.title}")
     
-    logger.info(f"전략 카드 생성 완료: {len(state.strategy_cards)}개")
+    logger.info(f"전략 카드 생성 완료: 1개")
     
-    return state
+    return {
+        "strategy_cards": [strategy_card.dict()],
+        "logs": logs
+    }
 
 
 def _generate_strategy_card(state) -> StrategyCard:
@@ -64,9 +72,10 @@ def _generate_strategy_card(state) -> StrategyCard:
     전략 카드 생성 로직 (예시)
     실제로는 LLM + 프롬프트 엔지니어링
     """
-    context = state.context_json or {}
-    situation = state.situation_json or {}
-    resource = state.resource_json or {}
+    context = state.get("context_json", {})
+    situation = state.get("situation_json", {})
+    resource = state.get("resource_json", {})
+    constraints = state.get("constraints", {})
     
     # 기본 전략 생성
     card = StrategyCard(
@@ -84,17 +93,17 @@ def _generate_strategy_card(state) -> StrategyCard:
             resource_refs=resource.get("resource_refs", [])
         ),
         target_segment="직장인, 20-40대",
-        channel_hints=state.constraints.get("preferred_channels", ["kakao", "instagram"]),
+        channel_hints=constraints.get("preferred_channels", ["kakao", "instagram"]),
         offer="11-14시 세트 메뉴 3종, 15% 할인",
         timeline=Timeline(
             start=datetime.now().strftime("%Y-%m-%d"),
             end="2025-11-30"
         ),
         budget=Budget(
-            cap=state.constraints.get("budget_krw", 50000),
+            cap=constraints.get("budget_krw", 50000),
             unit="KRW"
         ),
-        constraints_applied=state.constraints,
+        constraints_applied=constraints,
         kpi_targets=KPITargets(
             primary=KPITarget(
                 metric="trans",

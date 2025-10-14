@@ -90,10 +90,18 @@ def main():
         }
         
         # 초기 상태
-        initial_state = AgentState(
-            user_query=user_query,
-            constraints=constraints
-        )
+        initial_state = {
+            "user_query": user_query,
+            "intent": "strategy",
+            "constraints": constraints,
+            "context_json": None,
+            "situation_json": None,
+            "resource_json": None,
+            "strategy_cards": [],
+            "eval_report": None,
+            "batch_eval_result": None,
+            "logs": []
+        }
         
         # 진행 상황
         with st.spinner("전략 생성 중..."):
@@ -128,7 +136,7 @@ def _determine_budget_tier(budget_krw: int) -> str:
         return "high"
 
 
-def _display_results(state: AgentState):
+def _display_results(state):
     """결과 표시"""
     
     st.success("전략 생성이 완료되었습니다!")
@@ -145,8 +153,9 @@ def _display_results(state: AgentState):
     with tab1:
         st.header("생성된 전략")
         
-        if state.strategy_cards:
-            for idx, card in enumerate(state.strategy_cards):
+        strategy_cards = state.get("strategy_cards", [])
+        if strategy_cards:
+            for idx, card in enumerate(strategy_cards):
                 with st.expander(f"**전략 {idx+1}: {card.get('title', 'N/A')}**", expanded=True):
                     
                     col1, col2 = st.columns([2, 1])
@@ -180,8 +189,9 @@ def _display_results(state: AgentState):
     with tab2:
         st.header("점포/상권 컨텍스트")
         
-        if state.context_json:
-            ctx = state.context_json
+        context_json = state.get("context_json")
+        if context_json:
+            ctx = context_json
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -227,8 +237,9 @@ def _display_results(state: AgentState):
     with tab3:
         st.header("전략 평가")
         
-        if state.eval_report:
-            report = state.eval_report
+        eval_report = state.get("eval_report")
+        if eval_report:
+            report = eval_report
             
             severity_color = {
                 "low": "🟢",
@@ -279,7 +290,7 @@ def _display_results(state: AgentState):
     with tab4:
         st.header("실행 로그")
         
-        logs = state.logs
+        logs = state.get("logs", [])
         if logs:
             for log in logs:
                 st.text(log)

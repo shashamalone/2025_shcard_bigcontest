@@ -16,29 +16,29 @@ def situation_agent_node(state):
     - 신호 유효성 판단
     """
     logger.info("Situation Agent: 시작")
-    state.logs.append(f"[{datetime.now()}] situation_agent: 상황 분석 시작")
     
     # 의도 분석: 상황 관련 키워드 탐지
-    if not _need_situation_analysis(state.user_query):
+    if not _need_situation_analysis(state["user_query"]):
         logger.info("상황 분석 불필요")
-        state.situation_json = SituationJSON(
-            has_valid_signal=False,
-            summary="상황 신호 없음",
-            signals=[],
-            contract_version="situation.v1"
-        ).dict()
-        state.logs.append(f"[{datetime.now()}] situation_agent: 스킵 (관련 키워드 없음)")
-        return state
+        return {
+            "situation_json": SituationJSON(
+                has_valid_signal=False,
+                summary="상황 신호 없음",
+                signals=[],
+                contract_version="situation.v1"
+            ).dict(),
+            "logs": [f"[{datetime.now()}] situation_agent: 스킵 (관련 키워드 없음)"]
+        }
     
     # 상황 분석 실행
     situation_json = _analyze_situation(state)
     
-    state.situation_json = situation_json.dict()
-    state.logs.append(f"[{datetime.now()}] situation_agent: 완료 (신호: {len(situation_json.signals)}개)")
-    
     logger.info(f"Situation Agent: 완료 (신호: {len(situation_json.signals)}개)")
     
-    return state
+    return {
+        "situation_json": situation_json.dict(),
+        "logs": [f"[{datetime.now()}] situation_agent: 완료 (신호: {len(situation_json.signals)}개)"]
+    }
 
 
 def _need_situation_analysis(user_query: str) -> bool:
