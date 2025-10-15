@@ -13,7 +13,7 @@ from .evaluation_agent import evaluation_agent_node
 __all__ = [
     "marketing_graph",
     "AgentState",
-    'store_resolver_node'
+    "store_resolver_node",
     "strategy_supervisor_node",
     "merge_supervisor_node",
     "context_agent_node",

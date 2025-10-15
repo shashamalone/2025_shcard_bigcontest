@@ -4,24 +4,56 @@ Context Agent
 """
 from datetime import datetime
 from loguru import logger
+from typing import Optional
 
 from contracts import ContextJSON, Store, Period, Market, Risk, SessionConstraints, Provenance
+from tools.store_search_tool import mcp_get_store_final_data, mcp_search_stores_by_name
 
 
 def context_agent_node(state):
     """
     컨텍스트 에이전트
-    - 점포/상권 데이터 수집
+    - 점포/상권 데이터 수집 (df_final.csv 기반)
     - 파생 지표 계산
     - 위험 평가
     """
     logger.info("Context Agent: 시작")
-    
-    # 실제로는 DB 쿼리 + 계산
-    context_json = _build_context_json(state)
-    
+
+    # Strategy Supervisor에서 전달받은 가맹점 정보
+    store_id = state.get("store_id")
+    store_name = state.get("store_name")
+
+    if not store_id and not store_name:
+        logger.error("가맹점 ID 또는 가맹점명이 필요합니다")
+        return {
+            "context_json": None,
+            "logs": [f"[{datetime.now()}] context_agent: 가맹점 정보 누락"]
+        }
+
+    # DB에서 가맹점 데이터 조회
+    store_data = None
+    if store_id:
+        logger.info(f"가맹점 ID로 조회: {store_id}")
+        store_data = mcp_get_store_final_data.invoke({"encoded_mct": store_id})
+    elif store_name:
+        logger.info(f"가맹점명으로 조회: {store_name}")
+        search_results = mcp_search_stores_by_name.invoke({"store_name": store_name, "top_k": 1})
+        if search_results:
+            store_data = search_results[0]
+            logger.info(f"검색 결과: {store_data.get('MCT_NM')} ({store_data.get('ENCODED_MCT')})")
+
+    if not store_data:
+        logger.error(f"가맹점을 찾을 수 없습니다: {store_id or store_name}")
+        return {
+            "context_json": None,
+            "logs": [f"[{datetime.now()}] context_agent: 가맹점 조회 실패"]
+        }
+
+    # Context JSON 생성
+    context_json = _build_context_json_from_df_final(state, store_data)
+
     logger.info("Context Agent: 완료")
-    
+
     # 상태 업데이트할 내용만 반환
     return {
         "context_json": context_json.dict(),

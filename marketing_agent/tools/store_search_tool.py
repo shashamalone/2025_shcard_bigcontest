@@ -3,8 +3,10 @@ Store Search Tool
 FastMCP 기반 가맹점 검색 및 중복 해소
 """
 from langchain.tools import tool
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from loguru import logger
+import pandas as pd
+from pathlib import Path
 
 
 # FastMCP 클라이언트 연결
@@ -16,6 +18,9 @@ try:
 except ImportError:
     MCP_AVAILABLE = False
     logger.warning("FastMCP not available, using mock data")
+
+# df_final.csv 경로
+DF_FINAL_PATH = Path(__file__).parent.parent.parent / "data" / "df_final.csv"
 
 
 def search_stores_from_mcp(query: str, filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
@@ -193,9 +198,127 @@ def mcp_deduplicate_stores(store_ids: List[str]) -> List[str]:
         return unique_ids
 
 
+@tool
+def mcp_get_store_final_data(encoded_mct: str) -> Optional[Dict[str, Any]]:
+    """FastMCP를 통한 가맹점 최종 데이터 조회 (df_final.csv)
+
+    Args:
+        encoded_mct: 가맹점구분번호 (ENCODED_MCT)
+
+    Returns:
+        가맹점 최종 데이터 (df_final.csv 기반)
+
+    Example:
+        >>> mcp_get_store_final_data("16184E93D9")
+        {
+            "ENCODED_MCT": "16184E93D9",
+            "MCT_NM": "카페**",
+            "MCT_BSE_AR": "서울 성동구 응봉동",
+            "HPSN_MCT_ZCD_NM": "요식업",
+            ...
+        }
+    """
+    logger.info(f"MCP Get Store Final Data: {encoded_mct}")
+
+    if MCP_AVAILABLE:
+        # 실제 FastMCP 호출
+        # result = mcp_client.call_tool(
+        #     tool_name="get_store_final_data",
+        #     arguments={"encoded_mct": encoded_mct}
+        # )
+        # return result
+        pass
+    else:
+        # CSV 파일 직접 조회
+        try:
+            df = pd.read_csv(DF_FINAL_PATH, encoding='cp949')
+
+            # 가맹점 조회
+            store_data = df[df['ENCODED_MCT'] == encoded_mct]
+
+            if store_data.empty:
+                logger.warning(f"Store not found in df_final: {encoded_mct}")
+                return None
+
+            # 첫 번째 행을 dict로 변환
+            result = store_data.iloc[0].to_dict()
+
+            # NaN 값을 None으로 변환
+            result = {k: (None if pd.isna(v) else v) for k, v in result.items()}
+
+            logger.info(f"Store found: {result.get('MCT_NM', 'Unknown')}")
+            return result
+
+        except FileNotFoundError:
+            logger.error(f"df_final.csv not found at {DF_FINAL_PATH}")
+            return None
+        except Exception as e:
+            logger.error(f"Error reading df_final.csv: {e}")
+            return None
+
+
+@tool
+def mcp_search_stores_by_name(store_name: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    """FastMCP를 통한 가맹점명 검색 (df_final.csv)
+
+    Args:
+        store_name: 검색할 가맹점명 (부분 일치 가능)
+        top_k: 반환할 최대 결과 수
+
+    Returns:
+        검색된 가맹점 리스트
+
+    Example:
+        >>> mcp_search_stores_by_name("카페", top_k=3)
+        [
+            {
+                "ENCODED_MCT": "16184E93D9",
+                "MCT_NM": "카페**",
+                ...
+            }
+        ]
+    """
+    logger.info(f"MCP Search Stores by Name: query='{store_name}', top_k={top_k}")
+
+    if MCP_AVAILABLE:
+        # 실제 FastMCP 호출
+        pass
+    else:
+        # CSV 파일 직접 조회
+        try:
+            df = pd.read_csv(DF_FINAL_PATH, encoding='cp949')
+
+            # 가맹점명으로 검색 (부분 일치)
+            matched_stores = df[df['MCT_NM'].str.contains(store_name, na=False, case=False)]
+
+            # Top-K 제한
+            matched_stores = matched_stores.head(top_k)
+
+            # Dict 리스트로 변환
+            results = matched_stores.to_dict('records')
+
+            # NaN 값을 None으로 변환
+            results = [
+                {k: (None if pd.isna(v) else v) for k, v in record.items()}
+                for record in results
+            ]
+
+            logger.info(f"Found {len(results)} stores matching '{store_name}'")
+            return results
+
+        except FileNotFoundError:
+            logger.error(f"df_final.csv not found at {DF_FINAL_PATH}")
+            return []
+        except Exception as e:
+            logger.error(f"Error reading df_final.csv: {e}")
+            return []
+
+
 # LangChain tools 리스트
 store_search_tools = [
     mcp_search_stores,
     mcp_get_store_detail,
-    mcp_deduplicate_stores
+    mcp_deduplicate_stores,
+    mcp_get_store_final_data,
+    mcp_search_stores_by_name
 ]
