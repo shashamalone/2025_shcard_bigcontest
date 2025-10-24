@@ -11,25 +11,26 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from pathlib import Path
 
-# tools 임포트 (개별 try-except로 분리)
+# tools 임포트
 sys.path.append(str(Path(__file__).parent.parent))
 
+# 개별 import로 변경
 HAS_EVENTS_TOOL = False
 HAS_WEATHER_TOOL = False
-get_events_tool = None
-detect_weather_signals = None
 
 try:
     from tools.tavily_events import get_tool as get_events_tool
     HAS_EVENTS_TOOL = True
 except ImportError as e:
     print(f"⚠️  Tavily Events 도구 미설치: {e}")
+    get_events_tool = None
 
 try:
     from tools.weather_signals import detect_weather_signals
     HAS_WEATHER_TOOL = True
 except ImportError as e:
     print(f"⚠️  Weather Signals 도구 미설치: {e}")
+    detect_weather_signals = None
 
 HAS_SITUATION_TOOLS = HAS_EVENTS_TOOL or HAS_WEATHER_TOOL
 
@@ -50,22 +51,19 @@ def default_market_locator(mid: str):
         # 서울시청 기본값
         return (37.5665, 126.9780, mid)
 
-# LangChain StructuredTool 준비
-if HAS_EVENTS_TOOL and get_events_tool:
-    TAVILY_EVENTS_TOOL = get_events_tool(market_locator=default_market_locator)
-else:
-    TAVILY_EVENTS_TOOL = None
-
 def _call_events(market_id: str, start: str, end: str, user_query: Optional[str]) -> Dict[str, Any]:
     """Tavily 이벤트 호출"""
-    if not HAS_EVENTS_TOOL or not TAVILY_EVENTS_TOOL:
+    if not HAS_EVENTS_TOOL or not get_events_tool:
         return {
             "has_valid_signal": False,
-            "summary": "도구 미설치",
+            "summary": "이벤트 도구 미설치",
             "signals": [],
             "citations": [],
             "assumptions": []
         }
+
+    # TAVILY_EVENTS_TOOL 동적 생성
+    TAVILY_EVENTS_TOOL = get_events_tool(market_locator=default_market_locator)
 
     try:
         return TAVILY_EVENTS_TOOL.invoke({
@@ -88,7 +86,7 @@ def _call_weather(user_query: Optional[str], store: Dict[str, Any], period: Dict
     if not HAS_WEATHER_TOOL or not detect_weather_signals:
         return {
             "has_valid_signal": False,
-            "summary": "도구 미설치",
+            "summary": "날씨 도구 미설치",
             "signals": [],
             "citations": [],
             "assumptions": []

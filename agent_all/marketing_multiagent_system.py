@@ -1625,8 +1625,7 @@ def run_marketing_system(
         "execution_plan": final_state.get('execution_plan', ''),
         "final_report": final_state.get('final_report', ''),
         "tactical_card": final_state.get('tactical_card'),
-        "content_guide": final_state.get('content_guide'),
-        "situation": final_state.get('situation')  # 🔥 상황 정보 추가
+        "content_guide": final_state.get('content_guide')
     }
 
 # ============================================================================
