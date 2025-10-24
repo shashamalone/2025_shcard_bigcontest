@@ -7,13 +7,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+from pathlib import Path
 
 def load_data():
     """데이터 로드"""
     try:
-        flow_df = pd.read_csv('/mnt/c/Users/rladl/Desktop/bigcontest_2025/2025_shcard_bigcontest/data/유동인구.csv')
-        rent_df = pd.read_csv('/mnt/c/Users/rladl/Desktop/bigcontest_2025/2025_shcard_bigcontest/data/임대료.csv')
-        integrated_df = pd.read_csv('/mnt/c/Users/rladl/Desktop/bigcontest_2025/2025_shcard_bigcontest/data/통합_제공데이터.csv')
+        base_path = Path(__file__).parent.parent.parent
+        flow_df = pd.read_csv(base_path / 'data/유동인구.csv')
+        rent_df = pd.read_csv(base_path / 'data/임대료.csv')
+        integrated_df = pd.read_csv(base_path / 'data/통합_제공데이터.csv')
         # 기준일ID를 날짜로 변환
         if '기준일ID' in flow_df.columns:
             flow_df['기준일자'] = pd.to_datetime(flow_df['기준일ID'].astype(str), format='%Y%m%d', errors='coerce')
