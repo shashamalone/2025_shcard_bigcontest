@@ -5,7 +5,7 @@
 # Core Langchain & Langgraph
 # ============================================================================
 langchain==0.3.11
-langchain-core==0.3.26
+langchain-core==0.3.27
 langchain-community==0.3.10
 langchain-google-genai==2.0.8
 langgraph==0.2.58
