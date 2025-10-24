@@ -5,7 +5,7 @@
 import pandas as pd
 from pathlib import Path
 
-DATA_DIR = Path("/mnt/c/Users/rladl/Desktop/bigcontest_2025/2025_shcard_bigcontest/data")
+DATA_DIR = Path(__file__).parent.parent / "data"
 
 def check_store_ids():
     """가맹점 ID 확인"""

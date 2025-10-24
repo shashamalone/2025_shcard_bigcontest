@@ -102,10 +102,11 @@ def collect_situation_info(
     market_id: str,
     period_start: str,
     period_end: str,
-    user_query: Optional[str] = None
+    user_query: Optional[str] = None,
+    collect_mode: str = "both"  # "both", "weather_only", "event_only"
 ) -> Dict[str, Any]:
     """
-    상황 정보 수집 (병렬)
+    상황 정보 수집 (선택적 병렬)
 
     Args:
         market_id: 상권 ID (e.g., "M45", "강남")
@@ -132,17 +133,35 @@ def collect_situation_info(
             "assumptions": []
         }
 
+    # 🔥 사용자 쿼리 기반 자동 모드 판단
+    if user_query and collect_mode == "both":
+        query_lower = user_query.lower()
+        weather_keywords = ["날씨", "비", "폭염", "한파", "기온", "강수", "우천", "weather", "rain", "snow"]
+        event_keywords = ["행사", "이벤트", "축제", "팝업", "전시", "공연", "마켓", "event", "festival"]
+
+        has_weather = any(kw in query_lower for kw in weather_keywords)
+        has_event = any(kw in query_lower for kw in event_keywords)
+
+        if has_weather and not has_event:
+            collect_mode = "weather_only"
+            print(f"   🌤️  사용자 쿼리 분석: 날씨 전용 모드")
+        elif has_event and not has_weather:
+            collect_mode = "event_only"
+            print(f"   📅 사용자 쿼리 분석: 행사 전용 모드")
+
     store = {"market_id": market_id}
     period = {"start": period_start, "end": period_end}
 
-    # 병렬 실행
+    # 선택적 병렬 실행
     events, wx = None, None
+    futures = {}
 
     with ThreadPoolExecutor(max_workers=2) as ex:
-        futures = {
-            ex.submit(_call_events, market_id, period_start, period_end, user_query): "events",
-            ex.submit(_call_weather, user_query, store, period): "weather",
-        }
+        if collect_mode in ["both", "event_only"]:
+            futures[ex.submit(_call_events, market_id, period_start, period_end, user_query)] = "events"
+
+        if collect_mode in ["both", "weather_only"]:
+            futures[ex.submit(_call_weather, user_query, store, period)] = "weather"
 
         for fut in as_completed(futures):
             tag = futures[fut]

@@ -4,10 +4,11 @@ import requests
 from typing import Dict, Any, Tuple, Optional, Callable
 
 MARKET_ALIAS = {"M45": (37.5446, 127.0559, "성수동")}
-RAIN_MM = 10.0
-POP_HOURS = 6
-HEAT_1D, HEAT_2D = 33.0, 31.0
-COLD_1D, COLD_2D = -12.0, -10.0
+# 임계값 완화: 더 많은 날씨 변화 감지
+RAIN_MM = 5.0          # 10.0 → 5.0 (약한 비도 감지)
+POP_HOURS = 4          # 6 → 4 (4시간 이상이면 우천 신호)
+HEAT_1D, HEAT_2D = 30.0, 28.0    # 33/31 → 30/28 (더 낮은 온도에서 폭염 감지)
+COLD_1D, COLD_2D = -8.0, -5.0    # -12/-10 → -8/-5 (더 온화한 한파도 감지)
 
 def _locate(mid: str, locator: Optional[Callable[[str], Tuple[float,float,str]]]):
     if locator: return locator(mid)
@@ -81,10 +82,30 @@ def detect_weather_signals(input_json: Dict[str, Any],
             "relevance": 0.55, "valid": True, "reason": "최저기온 임계 충족"
         })
 
+    # 🆕 쾌적한 날씨 신호 (야외 활동 기회)
+    if not signals and tmax_overall is not None and 15 <= tmax_overall <= 25:
+        if pop_mean is not None and pop_mean < 30:
+            signals.append({
+                "signal_id": f"WXG-{start.replace('-','')}",
+                "signal_type": "weather",
+                "description": f"쾌적한 날씨(평균기온 {tmax_overall:.1f}°C, 강수확률 {pop_mean:.0f}%)",
+                "details": {
+                    "tmax_overall": tmax_overall,
+                    "tmin_overall": tmin_overall,
+                    "pop_mean": pop_mean,
+                    "area_name": area,
+                    "period": {"start": start, "end": end}
+                },
+                "relevance": 0.50,
+                "valid": True,
+                "reason": "야외 활동 최적 날씨 - 테라스/포장 마케팅 기회"
+            })
+
     kinds = []
     if any(s["signal_id"].startswith("WX-") for s in signals):  kinds.append("우천")
     if any(s["signal_id"].startswith("WXH-") for s in signals): kinds.append("폭염")
     if any(s["signal_id"].startswith("WXC-") for s in signals): kinds.append("한파")
+    if any(s["signal_id"].startswith("WXG-") for s in signals): kinds.append("쾌적")
     summary = f"{area} {start}~{end}: " + ("/".join(kinds) if kinds else "특이 신호 없음")
 
     return {

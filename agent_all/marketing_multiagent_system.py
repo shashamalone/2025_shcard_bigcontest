@@ -39,7 +39,7 @@ from pydantic import BaseModel, Field
 # ============================================================================
 
 MODEL_NAME = "gemini-2.5-flash"
-DATA_DIR = "/mnt/c/Users/rladl/Desktop/bigcontest_2025/2025_shcard_bigcontest/data"
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 # ============================================================================
 # 1. Data Models
@@ -1128,22 +1128,38 @@ def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
     """⚡ 상황 전술 카드 생성 (날씨 + 행사 정보 반영)"""
     print("\n[Tactical Card] 상황 전술 카드 생성 중...")
 
-    # 🔥 상황 정보 수집 (날씨 + 행사)
+    # 🔥 상황 정보 수집 (사용자 쿼리 기반 선택적 수집)
     situation_info = None
+
+    # 디버깅: state 값 확인
+    print(f"\n[DEBUG] target_market_id: {state.get('target_market_id')}")
+    print(f"[DEBUG] period_start: {state.get('period_start')}")
+    print(f"[DEBUG] period_end: {state.get('period_end')}")
+    print(f"[DEBUG] user_query: {state.get('user_query')}")
+
     if state.get('target_market_id') and state.get('period_start') and state.get('period_end'):
         try:
             from agents.situation_agent import collect_situation_info
-            print("   📊 상황 정보 수집 중 (날씨 + 행사)...")
+            user_query = state.get('user_query', '')
+            print(f"   📊 상황 정보 수집 중 (쿼리: '{user_query}')...")
+
             situation_info = collect_situation_info(
                 market_id=state['target_market_id'],
                 period_start=state['period_start'],
                 period_end=state['period_end'],
-                user_query=state.get('user_query')
+                user_query=user_query,
+                collect_mode="both"  # 자동으로 user_query 분석해서 선택
             )
             print(f"   ✓ 상황 시그널: 이벤트={situation_info.get('event_count', 0)}, 날씨={situation_info.get('weather_count', 0)}")
+            print(f"[DEBUG] situation_info 타입: {type(situation_info)}")
+            print(f"[DEBUG] situation_info 키: {situation_info.keys() if isinstance(situation_info, dict) else 'NOT A DICT'}")
         except Exception as e:
+            import traceback
             print(f"   ⚠️  상황 수집 실패: {e}")
+            print(f"[DEBUG] 전체 에러:\n{traceback.format_exc()}")
             situation_info = None
+    else:
+        print("[DEBUG] 상황 정보 수집 조건 불충족 - target_market_id, period_start, period_end 중 하나 이상 누락")
 
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0.7)
     stp = state['stp_output']
@@ -1210,7 +1226,11 @@ def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
     response = llm.invoke(prompt)
     state['tactical_card'] = response.content.strip()
     state['final_report'] = state['tactical_card']  # UI 호환성
-    state['situation_context'] = situation_info  # 상황 정보 저장
+    state['situation'] = situation_info  # 상황 정보 저장 (Streamlit 호환)
+
+    print(f"[DEBUG] state['situation'] 저장 완료: {type(state.get('situation'))}")
+    if isinstance(state.get('situation'), dict):
+        print(f"[DEBUG] situation 키: {state['situation'].keys()}")
     state['next'] = END
     return state
 
@@ -1535,6 +1555,7 @@ def run_marketing_system(
     target_store_id: str,
     target_store_name: str,
     task_type: str = "종합_전략_수립",
+    user_query: Optional[str] = None,
     target_market_id: Optional[str] = None,
     period_start: Optional[str] = None,
     period_end: Optional[str] = None,
@@ -1547,9 +1568,13 @@ def run_marketing_system(
     print(f"⏰ 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 80)
 
+    # user_query 기본값 설정
+    if not user_query:
+        user_query = f"Analyze {target_store_name}"
+
     initial_state = {
         "messages": [HumanMessage(content=f"{target_store_name} 분석 요청")],
-        "user_query": f"Analyze {target_store_name}",
+        "user_query": user_query,  # 실제 사용자 쿼리 사용
         "target_store_id": target_store_id,
         "target_store_name": target_store_name,
         "task_type": task_type,
@@ -1558,6 +1583,7 @@ def run_marketing_system(
         "target_market_id": target_market_id,
         "period_start": period_start,
         "period_end": period_end,
+        "situation": None,  # collect_situation_info() 결과
         "situation_context": None,
 
         # 콘텐츠 생성용

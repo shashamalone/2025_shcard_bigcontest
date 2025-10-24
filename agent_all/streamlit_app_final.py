@@ -17,6 +17,7 @@ import sys
 from datetime import date, timedelta
 import typing as Any
 
+
 # 메인 시스템 임포트
 sys.path.append(str(Path(__file__).parent))
 from marketing_multiagent_system import (
@@ -557,22 +558,62 @@ with st.sidebar:
     period_start = None
     period_end = None
     content_channels = []
-    
+
     if task_type == "상황_전술_제안":
         st.markdown("### ⚡ 상황 정보")
-        
-        situation_type = st.selectbox(
-            "상황 유형",
-            ["날씨 기반", "이벤트 기반", "긴급 할인"]
+
+        # 상황 분석 모드 선택 (필수)
+        situation_mode = st.radio(
+            "📊 상황 분석 모드",
+            ["🌤️ 날씨 기반", "📅 이벤트 기반"],
+            horizontal=True,
+            help="날씨 또는 이벤트 중 하나를 선택하세요"
         )
-        
-        if situation_type == "날씨 기반":
-            weather = st.selectbox("날씨", ["맑음", "비", "눈", "폭염", "한파"])
-            temperature = st.slider("온도 (°C)", -10, 40, 20)
-        
-        elif situation_type == "이벤트 기반":
-            event_name = st.text_input("이벤트명", "마장동 축제")
-            event_date = st.date_input("이벤트 날짜")
+
+        # 상권 정보 (필수)
+        target_market_id = st.text_input(
+            "📍 상권 ID 또는 지역명",
+            value="성수동",
+            placeholder="예: 성수동, 강남, 홍대 등",
+            help="상황 정보를 수집할 지역을 입력하세요"
+        )
+
+        # 기간 설정 (필수)
+        col1, col2 = st.columns(2)
+        with col1:
+            period_start = st.date_input("기간 시작", date.today())
+        with col2:
+            period_end = st.date_input("기간 종료", date.today() + timedelta(days=7))
+
+        # 상황별 힌트 입력
+        st.markdown("#### 📝 상황 설명 (선택사항)")
+
+        if "날씨" in situation_mode:
+            situation_hint = st.text_area(
+                "날씨 상황",
+                placeholder="예: 이번 주 폭염 예보, 주말에 강한 비 예상",
+                height=80,
+                help="예상되는 날씨 상황을 자유롭게 입력하세요"
+            )
+        else:  # 이벤트
+            situation_hint = st.text_area(
+                "이벤트 상황",
+                placeholder="예: 성수동에서 대규모 축제 개최 예정, 주변 팝업스토어 오픈",
+                height=80,
+                help="예상되는 이벤트나 행사를 자유롭게 입력하세요"
+            )
+
+        # user_query 구성 (모드 + 힌트)
+        mode_mapping = {
+            "🌤️ 날씨 기반": "날씨",
+            "📅 이벤트 기반": "이벤트"
+        }
+        mode_keyword = mode_mapping.get(situation_mode, "")
+
+        if situation_hint:
+            user_input = f"{mode_keyword} 분석: {situation_hint}"
+        else:
+            user_input = f"{mode_keyword} 분석"
     
     elif task_type == "콘텐츠_생성_가이드":
         st.markdown("### 📱 채널 선택")
@@ -611,6 +652,7 @@ if analyze_button and selected_store_id:
                 target_store_id=selected_store_id,
                 target_store_name=selected_store_name,
                 task_type=task_type,
+                user_query=user_input,  # 사용자 쿼리 전달 (날씨/행사 키워드 분석용)
                 target_market_id=target_market_id,
                 period_start=str(period_start) if period_start else None,
                 period_end=str(period_end) if period_end else None,

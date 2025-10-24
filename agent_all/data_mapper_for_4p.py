@@ -6,8 +6,9 @@
 import pandas as pd
 from typing import Dict, Optional
 from pathlib import Path
+import os
 
-DATA_DIR = "/mnt/c/Users/rladl/Desktop/bigcontest_2025/2025_shcard_bigcontest/data"
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 # ============================================================================
 # 1. 컬럼명 매핑 정의
