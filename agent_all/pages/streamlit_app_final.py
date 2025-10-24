@@ -259,7 +259,7 @@ st.markdown("""
 def load_store_list():
     """가맹점 목록 로드"""
     try:
-        data_dir = Path(__file__).parent.parent / "data"
+        data_dir = Path(__file__).parent.parent.parent / "data"
         df = pd.read_csv(
             data_dir / "store_segmentation_final_re.csv",
             encoding='utf-8-sig'
