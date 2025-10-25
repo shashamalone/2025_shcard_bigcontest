@@ -546,7 +546,7 @@ with tech_col2:
     st.markdown("""
     <div style='text-align: center; padding: 1.5rem; background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%); border-radius: 15px; color: white; box-shadow: 0 8px 20px rgba(86, 171, 47, 0.3);'>
         <h3>📊 데이터</h3>
-        <p>Pandas<br>NumPy<br>CSV/JSON</p>
+        <p>Pandas<br>NumPy<br>git/JSON</p>
     </div>
     """, unsafe_allow_html=True)
 
