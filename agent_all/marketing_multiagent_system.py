@@ -621,9 +621,6 @@ st.markdown(f"""
     <p style='font-size: 0.95rem; color: #999; margin-bottom: 1rem;'>
         Powered by Langchain, Langgraph, and Gemini 2.5 Flash
     </p>
-    <p style='font-size: 0.85rem; color: #aaa;'>
-        마지막 업데이트: {current_time}
-    </p>
     <div style='margin-top: 1.5rem;'>
         <span style='margin: 0 0.5rem; font-size: 1.5rem;'>🤝</span>
         <span style='margin: 0 0.5rem; font-size: 1.5rem;'>📊</span>
