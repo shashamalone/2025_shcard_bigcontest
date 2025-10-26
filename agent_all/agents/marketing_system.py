@@ -1608,14 +1608,22 @@ def run_marketing_system(
     period_start: Optional[str] = None,
     period_end: Optional[str] = None,
     content_channels: Optional[List[str]] = None,
-    collect_mode: str = "weather_only"  # "weather_only" 또는 "event_only"
+    collect_mode: str = "weather_only",  # "weather_only" 또는 "event_only"
+    progress_callback: Optional[callable] = None  # 🔥 진행 상황 콜백
 ) -> Dict:
     """마케팅 시스템 실행"""
     start_time = time.time()
-    print("=" * 80)
-    print(f"🚀 Marketing MultiAgent System V2 (Integrated)")
-    print(f"⏰ 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 80)
+
+    def log_progress(message: str):
+        """진행 상황 로그 (콜백 + 콘솔)"""
+        print(message)
+        if progress_callback:
+            progress_callback(message)
+
+    log_progress("=" * 80)
+    log_progress(f"🚀 Marketing MultiAgent System V2 (Integrated)")
+    log_progress(f"⏰ 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    log_progress("=" * 80)
 
     # user_query 기본값 설정
     if not user_query:

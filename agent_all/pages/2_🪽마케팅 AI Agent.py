@@ -809,14 +809,56 @@ with st.sidebar:
 # ============================================================================
 
 if analyze_button and selected_store_id:
-    
-    with st.spinner(f"📊 {task_type} 진행 중...(예상 소요 시간: 1분~1분30초)"):
-        
+
+    # 사용자 입력이 있으면 표시
+    if user_input and user_input.strip():
+        st.info(f"💬 **사용자 요청**: {user_input}")
+
+    # 🔥 진행 상황 안내 (작업 유형별로 다르게 표시)
+    progress_messages = {
+        "종합_전략_수립": {
+            "time": "1분 ~ 1분 30초",
+            "steps": [
+                "▶️ **Market Analysis**: STP 분석 및 포지셔닝 맵 생성 (~5초)",
+                "▶️ **4P Mapping**: 가맹점 데이터 매핑 (~3초)",
+                "▶️ **Strategy Generation**: 데이터 기반 전략 카드 3개 생성 (~30초)",
+                "▶️ **Report**: 종합 보고서 작성 (~5초)"
+            ]
+        },
+        "상황_전술_제안": {
+            "time": "30초 ~ 1분",
+            "steps": [
+                "▶️ **Market Analysis**: STP 분석 (~5초)",
+                "▶️ **Situation Collection**: 날씨/이벤트 정보 수집 (~10초)",
+                "▶️ **Tactical Generation**: 긴급 전술 카드 생성 (~20초)"
+            ]
+        },
+        "콘텐츠_생성_가이드": {
+            "time": "1분 ~ 1분 30초",
+            "steps": [
+                "▶️ **Market Analysis**: STP 분석 (~5초)",
+                "▶️ **4P Strategy**: 전략 카드 생성 (~30초)",
+                "▶️ **Content Generation**: 무드보드 및 채널별 가이드 작성 (~30초)"
+            ]
+        }
+    }
+
+    current_progress = progress_messages.get(task_type, progress_messages["종합_전략_수립"])
+
+    with st.expander("🔄 진행 상황", expanded=True):
+        st.markdown(f"""
+        **📊 작업 유형**: {task_type}
+
+        **예상 소요 시간**: {current_progress['time']}
+
+        **진행 단계**:
+        """ + "\n        ".join([f"- {step}" for step in current_progress['steps']]) + """
+
+        *잠시만 기다려주세요...*
+        """)
+
+    with st.spinner(""):
         try:
-            # 사용자 입력이 있으면 표시
-            if user_input and user_input.strip():
-                st.info(f"💬 **사용자 요청**: {user_input}")
-            
             # 시스템 실행
             result = run_marketing_system(
                 target_store_id=selected_store_id,
