@@ -799,7 +799,7 @@ with st.sidebar:
 
     # 분석 시작 버튼 - task_type이 있을 때만 활성화
     if task_type:
-        analyze_button = st.button("🚀 분석 시작", type="primary", width='stretch')
+        analyze_button = st.button("🚀 분석 시작", type="primary", use_container_width=True)
     else:
         st.warning("⚠️ 입력을 작성해주세요.")
         analyze_button = False
