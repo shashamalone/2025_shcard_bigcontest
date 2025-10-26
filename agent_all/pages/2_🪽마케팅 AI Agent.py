@@ -814,7 +814,7 @@ if analyze_button and selected_store_id:
     if user_input and user_input.strip():
         st.info(f"💬 **사용자 요청**: {user_input}")
 
-    # 🔥 진행 상황 안내 (작업 유형별로 다르게 표시)
+    # 진행 상황 안내 (작업 유형별로 다르게 표시)
     progress_messages = {
         "종합_전략_수립": {
             "time": "1분 ~ 1분 30초",
