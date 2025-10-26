@@ -3,11 +3,15 @@ Marketing MultiAgent System  - Integrated with Real Data Logic
 ==================================================================
 서브그래프 구조 + 실제 PCA 가중치 기반 분석
 """
-
-# GRPC 및 로깅 경고 메시지 무시
+# GRPC 및 로깅 경고 메시지 완전히 무시
 import os
+import warnings
+
+# GRPC 관련 경고 완전 제거
 os.environ['GRPC_VERBOSITY'] = 'ERROR'
-os.environ['GLOG_minloglevel'] = '2'
+os.environ['GRPC_TRACE'] = ''
+os.environ['GRPC_VERBOSITY'] = 'NONE'
+os.environ['GLOG_minloglevel'] = '3'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import json
@@ -128,6 +132,7 @@ class MarketAnalysisState(TypedDict):
 class StrategyPlanningState(TypedDict):
     """Strategy Planning Team State"""
     messages: Annotated[Sequence[BaseMessage], operator.add]
+    user_query: str  # 🔥 사용자 요청 추가
     task_type: str
     stp_output: STPOutput
     store_raw_data: Optional[StoreRawData]
@@ -562,10 +567,17 @@ def positioning_agent(state: MarketAnalysisState) -> MarketAnalysisState:
 
 # 4P 데이터 매퍼 임포트
 try:
+    import sys
+    from pathlib import Path
+    # agents/ 디렉토리에서 실행 시 상위 디렉토리 추가
+    parent_dir = Path(__file__).parent.parent
+    if str(parent_dir) not in sys.path:
+        sys.path.insert(0, str(parent_dir))
+
     from data_mapper_for_4p import DataLoaderFor4P, DataMapperFor4P
     HAS_4P_MAPPER = True
-except ImportError:
-    print("⚠️  data_mapper_for_4p 모듈 없음 - 기본 모드로 실행")
+except ImportError as e:
+    print(f"⚠️  data_mapper_for_4p 모듈 없음 - 기본 모드로 실행 (상세: {e})")
     HAS_4P_MAPPER = False
 
 def _summarize_4p_data(data_4p: Dict[str, Any]) -> Dict[str, Any]:
@@ -858,12 +870,13 @@ def _generate_fallback_cards(stp: STPOutput, data_4p_summary: Dict, evidence: Li
     return cards
 
 def strategy_4p_agent(state: StrategyPlanningState) -> StrategyPlanningState:
-    """🔥 개선된 4P Strategy Agent - 실제 데이터 기반 전략 생성"""
+    """🔥 4P Strategy Agent - 실제 데이터 기반 전략 생성"""
     print("[4P Strategy] 데이터 기반 3개 전략 카드 생성 중...")
 
     task_type = state['task_type']
     stp = state['stp_output']
     data_4p = state.get('data_4p_mapped', {})  # 🔥 4P 매핑 데이터
+    user_query = state.get('user_query', '')  # 🔥 사용자 요청 가져오기
 
     llm = ChatGoogleGenerativeAI(model=MODEL_NAME, temperature=0.7)
 
@@ -898,6 +911,27 @@ def strategy_4p_agent(state: StrategyPlanningState) -> StrategyPlanningState:
 
     data_4p_json = json.dumps(data_4p_summary, ensure_ascii=False, indent=2)
 
+    # 🔥 사용자 요청이 있으면 추가
+    user_query_section = ""
+    print(f"[DEBUG] user_query 체크: '{user_query}' (타입: {type(user_query)})")
+    print(f"[DEBUG] 기본 쿼리: 'Analyze {stp.store_current_position.store_name}'")
+
+    if user_query and user_query.strip() and user_query != f"Analyze {stp.store_current_position.store_name}":
+        print(f"[DEBUG] ✅ user_query 프롬프트에 추가됨: '{user_query}'")
+        user_query_section = f"""
+# 🎯 사용자 요청 사항
+**"{user_query}"**
+
+위 사용자 요청을 전략 카드에 최우선으로 반영하세요.
+- 특정 타겟층 언급 시 → 해당 타겟에 집중
+- 특정 방향성 언급 시 → 해당 방향으로 전략 수립
+- 키워드 언급 시 → 전략 카드 제목 및 내용에 포함
+
+---
+"""
+    else:
+        print(f"[DEBUG] ❌ user_query 미적용 (조건 불충족)")
+
     prompt = f"""
 당신은 마케팅 전략가입니다. 다음 **실제 가맹점 데이터**와 STP 분석 결과를 바탕으로 **3가지 대안 전략 카드**를 생성하세요.
 
@@ -918,7 +952,7 @@ def strategy_4p_agent(state: StrategyPlanningState) -> StrategyPlanningState:
 - PC1 Score: {stp.store_current_position.pc1_score:.2f}
 - PC2 Score: {stp.store_current_position.pc2_score:.2f}
 
----
+{user_query_section}
 
 # 🔥 가맹점 실제 운영 데이터 (4P 매핑)
 
@@ -1124,10 +1158,10 @@ def generate_comprehensive_report_node(state: SupervisorState) -> SupervisorStat
     return state
 
 def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
-    """⚡ 상황 전술 카드 생성 (날씨 + 행사 정보 반영)"""
+    """ 상황 전술 카드 생성 (날씨 + 행사 정보 반영)"""
     print("\n[Tactical Card] 상황 전술 카드 생성 중...")
 
-    # 🔥 상황 정보 수집 (사용자 쿼리 기반 선택적 수집)
+    # 상황 정보 수집 (사용자 쿼리 기반 선택적 수집)
     situation_info = None
 
     # 디버깅: state 값 확인
@@ -1140,22 +1174,42 @@ def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
         try:
             from agents.situation_agent import collect_situation_info
             user_query = state.get('user_query', '')
-            print(f"   📊 상황 정보 수집 중 (쿼리: '{user_query}')...")
+            # state에서 사용자가 선택한 collect_mode 가져오기 (기본값: weather_only)
+            collect_mode = state.get('collect_mode', 'weather_only')
+
+            # 🔍 디버깅: 상황 수집 파라미터 확인
+            print(f"   🔍 상황 수집 파라미터:")
+            print(f"      - market_id: {state.get('target_market_id')}")
+            print(f"      - period_start: {state.get('period_start')}")
+            print(f"      - period_end: {state.get('period_end')}")
+            print(f"      - user_query: '{user_query}'")
+            print(f"      - collect_mode: {collect_mode}")
+
+            print(f"   📊 상황 정보 수집 중...")
 
             situation_info = collect_situation_info(
                 market_id=state['target_market_id'],
                 period_start=state['period_start'],
                 period_end=state['period_end'],
                 user_query=user_query,
-                collect_mode="both"  # 자동으로 user_query 분석해서 선택
+                collect_mode=collect_mode  # 사용자 선택 모드 전달
             )
+
+            # 🔍 디버깅: 상황 수집 결과 확인
+            print(f"   🔍 situation_info 상세:")
+            print(f"      - 타입: {type(situation_info)}")
+            if isinstance(situation_info, dict):
+                print(f"      - 키 목록: {list(situation_info.keys())}")
+                print(f"      - 이벤트 수: {situation_info.get('event_count', 0)}")
+                print(f"      - 날씨 수: {situation_info.get('weather_count', 0)}")
+                print(f"      - events 데이터: {situation_info.get('events', {})}")
+                print(f"      - weather 데이터: {situation_info.get('weather', {})}")
             print(f"   ✓ 상황 시그널: 이벤트={situation_info.get('event_count', 0)}, 날씨={situation_info.get('weather_count', 0)}")
-            print(f"[DEBUG] situation_info 타입: {type(situation_info)}")
-            print(f"[DEBUG] situation_info 키: {situation_info.keys() if isinstance(situation_info, dict) else 'NOT A DICT'}")
         except Exception as e:
             import traceback
             print(f"   ⚠️  상황 수집 실패: {e}")
-            print(f"[DEBUG] 전체 에러:\n{traceback.format_exc()}")
+            print(f"   🔍 전체 에러 스택:")
+            print(traceback.format_exc())
             situation_info = None
     else:
         print("[DEBUG] 상황 정보 수집 조건 불충족 - target_market_id, period_start, period_end 중 하나 이상 누락")
@@ -1237,15 +1291,6 @@ def generate_content_guide_node(state: SupervisorState) -> SupervisorState:
     """📱 콘텐츠 생성 가이드 (무드보드 포함)"""
     print("\n[Content Guide] 콘텐츠 생성 가이드 작성 중...")
 
-    # 🔍 디버깅: state 확인
-    print(f"   🔍 state 타입: {type(state)}")
-    if isinstance(state, dict):
-        print(f"   🔍 state 키: {list(state.keys())[:10]}")
-        print(f"   🔍 stp_output 존재: {'stp_output' in state}")
-        print(f"   🔍 stp_output 값: {state.get('stp_output')}")
-        print(f"   🔍 selected_strategy 존재: {'selected_strategy' in state}")
-        print(f"   🔍 selected_strategy 값: {state.get('selected_strategy')}")
-
     # agents/content_agent.py 활용
     try:
         from agents.content_agent import content_agent_node, ContentGuide
@@ -1254,8 +1299,9 @@ def generate_content_guide_node(state: SupervisorState) -> SupervisorState:
         stp = state.get('stp_output') if state else None
         selected = state.get('selected_strategy') if state else None
 
-        print(f"   🔍 추출된 stp: {stp}")
-        print(f"   🔍 추출된 selected: {selected}")
+        # # 디버깅
+        # print(f"   🔍 추출된 stp: {stp}")
+        # print(f"   🔍 추출된 selected: {selected}")
 
         if not stp or not selected:
             raise ValueError(f"STP={bool(stp)} (타입: {type(stp)}), Strategy={bool(selected)} (타입: {type(selected)}) - 필수 데이터 누락")
@@ -1280,6 +1326,8 @@ def generate_content_guide_node(state: SupervisorState) -> SupervisorState:
             "targeting_positioning": stp.target_cluster_name if hasattr(stp, 'target_cluster_name') else "타겟 분석",
             "market_customer_analysis": f"타겟 군집: {stp.target_cluster_name}" if hasattr(stp, 'target_cluster_name') else "",
             "situation": state.get('situation_context', {}),
+            "user_query": state.get('user_query', ''),  # 🔥 사용자 요청 전달
+            "selected_channels": state.get('content_channels', ["Instagram", "Naver Blog"]),  # 🔥 채널 선택 전달
             "log": []
         }
 
@@ -1486,6 +1534,7 @@ def create_super_graph() -> StateGraph:
     def run_strategy_team(s: SupervisorState) -> Dict:
         strategy_input = {
             "messages": s.get("messages", []),
+            "user_query": s.get("user_query", ""),  # 🔥 user_query 전달
             "task_type": s["task_type"],
             "stp_output": s["stp_output"],
             "store_raw_data": s.get("store_raw_data"),
@@ -1558,7 +1607,8 @@ def run_marketing_system(
     target_market_id: Optional[str] = None,
     period_start: Optional[str] = None,
     period_end: Optional[str] = None,
-    content_channels: Optional[List[str]] = None
+    content_channels: Optional[List[str]] = None,
+    collect_mode: str = "weather_only"  # "weather_only" 또는 "event_only"
 ) -> Dict:
     """마케팅 시스템 실행"""
     start_time = time.time()
@@ -1582,6 +1632,7 @@ def run_marketing_system(
         "target_market_id": target_market_id,
         "period_start": period_start,
         "period_end": period_end,
+        "collect_mode": collect_mode,  # 사용자 선택 모드 추가
         "situation": None,  # collect_situation_info() 결과
         "situation_context": None,
 
@@ -1674,7 +1725,7 @@ if __name__ == "__main__":
     content_channels = None
 
     if task_type == "상황_전술_제안":
-        target_market_id = input("📍 상권 ID (예: M45, 기본값=성수동): ").strip() or "성수동"
+        target_market_id = input("📍 상권 ID (예: 강남, 기본값=성수동): ").strip() or "성수동"
         period_start = input("📅 시작일 (YYYY-MM-DD, 기본값=오늘): ").strip() or str(date.today())
         period_end = input("📅 종료일 (YYYY-MM-DD, 기본값=+7일): ").strip() or str(date.today() + timedelta(days=7))
 
@@ -1685,11 +1736,21 @@ if __name__ == "__main__":
         else:
             content_channels = ["Instagram", "Naver Blog"]
 
+    # 🔥 사용자 요청 입력 추가
+    print("\n" + "=" * 60)
+    user_query = input("💬 사용자 요청 (선택, 예: 20대 여성 타겟 가성비 전략): ").strip() or None
+    if user_query:
+        print(f"✅ user_query 입력됨: '{user_query}'")
+    else:
+        print(f"ℹ️ user_query 미입력 (기본 분석 모드)")
+    print("=" * 60 + "\n")
+
     # 실행
     result = run_marketing_system(
         target_store_id=store_id,
         target_store_name=store_name,
         task_type=task_type,
+        user_query=user_query,
         target_market_id=target_market_id,
         period_start=period_start,
         period_end=period_end,
@@ -1699,11 +1760,24 @@ if __name__ == "__main__":
     print(f"\n📊 결과:")
     print(f"- 작업 유형: {result['task_type']}")
 
+    # 🔥 user_query 검증 출력
+    if user_query:
+        print(f"\n{'=' * 60}")
+        print(f"🔍 user_query 검증: '{user_query}'")
+        print(f"{'=' * 60}")
+
     if task_type == "종합_전략_수립":
         print(f"- 전략 카드 수: {len(result['strategy_cards'])}")
         if result['selected_strategy']:
             print(f"- 선택된 전략: {result['selected_strategy'].title}")
             print(f"- 우선순위: {result['selected_strategy'].priority}")
+
+            # 🔥 user_query 반영 여부 확인
+            if user_query:
+                print(f"\n📋 전략 카드 제목 확인 (user_query 반영 여부):")
+                for i, card in enumerate(result['strategy_cards'], 1):
+                    print(f"  {i}. {card.title}")
+
         print(f"\n{result['final_report']}")
 
     elif task_type == "상황_전술_제안":
@@ -1712,7 +1786,14 @@ if __name__ == "__main__":
     elif task_type == "콘텐츠_생성_가이드":
         content_guide = result.get('content_guide', {})
         if content_guide:
-            print(f"\n🎨 무드보드: {', '.join(content_guide.get('mood_board', []))}")
+            print(f"\n🎨 무드보드 (한글): {', '.join(content_guide.get('mood_board', []))}")
+            print(f"🎨 무드보드 (영어): {', '.join(content_guide.get('mood_board_en', []))}")
             print(f"🎭 톤앤매너: {content_guide.get('brand_tone', 'N/A')}")
             print(f"📺 채널 수: {len(content_guide.get('channels', []))}")
+
+            # 🔥 user_query 반영 여부 확인
+            if user_query:
+                print(f"\n📋 타겟 오디언스 확인 (user_query 반영 여부):")
+                print(f"  {content_guide.get('target_audience', 'N/A')}")
+
         print(f"\n{result.get('final_report', '보고서 없음')}")

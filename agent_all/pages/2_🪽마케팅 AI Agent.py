@@ -16,10 +16,17 @@ from pathlib import Path
 import sys
 from datetime import date, timedelta
 import typing as Any
+import requests
+import random
 
 # GRPC 및 로깅 경고 메시지 완전히 무시
 import os
 import warnings
+
+# 🔥 .env 파일 로드 (agent_all 폴더 기준)
+from dotenv import load_dotenv
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # GRPC 관련 경고 완전 제거
 os.environ['GRPC_VERBOSITY'] = 'ERROR'
@@ -101,6 +108,92 @@ JSON 출력 (예시):
             return IntentClassification(task_type="종합_전략_수립", confidence=0.6, reasoning="기본값")
 
 HAS_INTENT_CLASSIFIER = True
+
+# ============================================================================
+# Pexels API - Moodboard Image Fetching
+# ============================================================================
+
+# 환경변수에서 API 키 가져오기
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "NiCSGOCv9sUFIyekjbTsVrp22ZDmTvTDHaFuAVUpsP3ENj6wWcHvIfP3")
+
+def fetch_moodboard_image(keyword: str, orientation: str = "portrait") -> dict:
+    """
+    Pexels API를 사용하여 키워드에 맞는 이미지 1장 가져오기
+
+    Args:
+        keyword: 검색할 키워드
+        orientation: 이미지 방향 (portrait, landscape, square)
+
+    Returns:
+        dict: 이미지 정보 (img, alt, photographer, photographer_url, avg_color)
+    """
+    if not PEXELS_API_KEY:
+        print("⚠️ PEXELS_API_KEY가 설정되지 않았습니다.")
+        return None
+
+    try:
+        # URL 인코딩으로 한글 키워드 처리
+        import urllib.parse
+        encoded_keyword = urllib.parse.quote(keyword)
+
+        url = f"https://api.pexels.com/v1/search?query={encoded_keyword}&per_page=15&page=1&orientation={orientation}"
+        headers = {"Authorization": PEXELS_API_KEY}
+
+        response = requests.get(url, headers=headers, timeout=15)
+
+        # 상세 에러 로깅
+        if response.status_code == 401:
+            print(f"❌ API 인증 실패 ({keyword}): API 키가 유효하지 않습니다.")
+            return None
+        elif response.status_code == 429:
+            print(f"⚠️ API 요청 한도 초과 ({keyword}): 잠시 후 다시 시도하세요.")
+            return None
+
+        response.raise_for_status()
+
+        photos = response.json().get("photos", [])
+        if not photos:
+            print(f"⚠️ '{keyword}'에 대한 검색 결과가 없습니다. 다른 키워드로 재시도합니다.")
+
+            # 영어로 재시도 (한글 키워드인 경우)
+            if any('\uac00' <= c <= '\ud7a3' for c in keyword):
+                # 일반적인 폴백 키워드 사용
+                fallback_keyword = "food" if "음식" in keyword or "맛" in keyword else "lifestyle"
+                encoded_fallback = urllib.parse.quote(fallback_keyword)
+                url = f"https://api.pexels.com/v1/search?query={encoded_fallback}&per_page=15&page=1&orientation={orientation}"
+                response = requests.get(url, headers=headers, timeout=15)
+                response.raise_for_status()
+                photos = response.json().get("photos", [])
+
+                if not photos:
+                    return None
+
+        # 랜덤하게 하나 선택
+        photo = random.choice(photos)
+
+        src = photo.get("src", {})
+        img_url = src.get("portrait") or src.get("large") or src.get("large2x") or src.get("medium")
+
+        if not img_url:
+            print(f"⚠️ '{keyword}' 이미지 URL을 찾을 수 없습니다.")
+            return None
+
+        return {
+            "img": img_url,
+            "alt": photo.get("alt") or keyword,
+            "photographer": photo.get("photographer", "Unknown"),
+            "photographer_url": photo.get("photographer_url", "#"),
+            "avg_color": photo.get("avg_color", "#999999")
+        }
+    except requests.exceptions.Timeout:
+        print(f"⏱️ 이미지 로딩 시간 초과 ({keyword})")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"❌ 네트워크 오류 ({keyword}): {str(e)}")
+        return None
+    except Exception as e:
+        print(f"❌ 이미지 로딩 실패 ({keyword}): {str(e)}")
+        return None
 
 # ============================================================================
 # Page Configuration
@@ -295,46 +388,117 @@ def load_store_list():
         return pd.DataFrame(columns=['가맹점구분번호', '가맹점명', '업종', '상권'])
 
 def create_positioning_map(stp_output):
-    """포지셔닝 맵 시각화"""
+    """포지셔닝 맵 시각화 (characteristics 포함)"""
     if not stp_output or not hasattr(stp_output, 'cluster_profiles'):
         return None
-        
+
     fig = go.Figure()
     colors = px.colors.qualitative.Set3
-    
+
     for i, cluster in enumerate(stp_output.cluster_profiles):
+        # 호버 텍스트에 characteristics 포함
+        hover_text = f"<b>{cluster.cluster_name}</b><br>" \
+                     f"특성: {cluster.characteristics}<br>" \
+                     f"매장 수: {cluster.store_count}개<br>" \
+                     f"PC1: {cluster.pc1_mean:.2f}<br>" \
+                     f"PC2: {cluster.pc2_mean:.2f}"
+
+        # 텍스트에도 characteristics 추가
+        display_text = f"{cluster.cluster_name}<br><sub>{cluster.characteristics}</sub>"
+
         fig.add_trace(go.Scatter(
             x=[cluster.pc1_mean],
             y=[cluster.pc2_mean],
             mode='markers+text',
             name=cluster.cluster_name,
-            text=[cluster.cluster_name],
+            text=[display_text],
             textposition="top center",
+            hovertext=[hover_text],
+            hoverinfo='text',
             marker=dict(
                 size=cluster.store_count / 2,
                 color=colors[i % len(colors)],
-                opacity=0.6
-            )
+                opacity=0.6,
+                line=dict(width=1, color='white')
+            ),
+            textfont=dict(size=10)
         ))
-    
+
     if stp_output.store_current_position:
         current = stp_output.store_current_position
+        current_hover = f"<b>현재 위치</b><br>" \
+                       f"가맹점: {current.store_name}<br>" \
+                       f"클러스터: {current.cluster_name}<br>" \
+                       f"PC1: {current.pc1_score:.2f}<br>" \
+                       f"PC2: {current.pc2_score:.2f}"
+
         fig.add_trace(go.Scatter(
             x=[current.pc1_score],
             y=[current.pc2_score],
             mode='markers+text',
             name='현재 위치',
-            text=['현재'],
-            marker=dict(size=20, color='red', symbol='star')
+            text=['★ 현재'],
+            textposition="top center",
+            hovertext=[current_hover],
+            hoverinfo='text',
+            marker=dict(size=20, color='red', symbol='star', line=dict(width=2, color='darkred')),
+            textfont=dict(size=12, color='red')
         ))
-    
+
+    # 축 범위 계산 (원점 포함, 대칭)
+    all_x = [c.pc1_mean for c in stp_output.cluster_profiles]
+    all_y = [c.pc2_mean for c in stp_output.cluster_profiles]
+
+    if stp_output.store_current_position:
+        all_x.append(stp_output.store_current_position.pc1_score)
+        all_y.append(stp_output.store_current_position.pc2_score)
+
+    x_max = max(abs(min(all_x)), abs(max(all_x))) * 1.3
+    y_max = max(abs(min(all_y)), abs(max(all_y))) * 1.3
+
     fig.update_layout(
         title='시장 포지셔닝 맵',
-        xaxis_title='PC1',
-        yaxis_title='PC2',
-        height=500
+        xaxis=dict(
+            title='PC1 (성장성) →',
+            range=[-x_max, x_max],
+            zeroline=True,
+            zerolinewidth=2,
+            zerolinecolor='black',
+            gridcolor='lightgray',
+            showgrid=True
+        ),
+        yaxis=dict(
+            title='PC2 (경쟁 강도) ↑',
+            range=[-y_max, y_max],
+            zeroline=True,
+            zerolinewidth=2,
+            zerolinecolor='black',
+            gridcolor='lightgray',
+            showgrid=True
+        ),
+        height=650,
+        hovermode='closest',
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="right",
+            x=0.99,
+            bgcolor='rgba(255,255,255,0.8)'
+        ),
+        plot_bgcolor='rgba(250,250,250,0.5)'
     )
-    
+
+    # 사분면 배경 추가 (선택적)
+    fig.add_shape(type="rect", x0=0, y0=0, x1=x_max, y1=y_max,
+                  fillcolor="rgba(173,216,230,0.1)", layer="below", line_width=0)  # 1사분면 (고성장, 고경쟁)
+    fig.add_shape(type="rect", x0=-x_max, y0=0, x1=0, y1=y_max,
+                  fillcolor="rgba(144,238,144,0.1)", layer="below", line_width=0)  # 2사분면 (저성장, 고경쟁)
+    fig.add_shape(type="rect", x0=-x_max, y0=-y_max, x1=0, y1=0,
+                  fillcolor="rgba(255,255,224,0.1)", layer="below", line_width=0)  # 3사분면 (저성장, 저경쟁)
+    fig.add_shape(type="rect", x0=0, y0=-y_max, x1=x_max, y1=0,
+                  fillcolor="rgba(255,218,185,0.1)", layer="below", line_width=0)  # 4사분면 (고성장, 저경쟁)
+
     return fig
 
 def render_strategy_card(card, card_index):
@@ -556,6 +720,7 @@ with st.sidebar:
     period_start = None
     period_end = None
     content_channels = []
+    selected_collect_mode = "weather_only"  # 기본값
 
     if task_type == "상황_전술_제안":
         st.markdown("### ⚡ 상황 정보")
@@ -601,6 +766,13 @@ with st.sidebar:
                 help="예상되는 이벤트나 행사를 자유롭게 입력하세요"
             )
 
+        # collect_mode 매핑 (marketing_system.py로 전달)
+        collect_mode_mapping = {
+            "🌤️ 날씨 기반": "weather_only",
+            "📅 이벤트 기반": "event_only"
+        }
+        selected_collect_mode = collect_mode_mapping.get(situation_mode, "weather_only")
+
         # user_query 구성 (모드 + 힌트)
         mode_mapping = {
             "🌤️ 날씨 기반": "날씨",
@@ -613,21 +785,21 @@ with st.sidebar:
         else:
             user_input = f"{mode_keyword} 분석"
     
-    elif task_type == "콘텐츠_생성_가이드":
-        st.markdown("### 📱 채널 선택")
+    # elif task_type == "콘텐츠_생성_가이드":
+        # st.markdown("### 📱 채널 선택")
         
-        content_channels = st.multiselect(
-            "콘텐츠 채널",
-            ["Instagram", "Naver Blog", "YouTube Shorts", "TikTok", "카카오톡"],
-            default=["Instagram"]
-        )
+        # content_channels = st.multiselect(
+        #     "콘텐츠 채널",
+        #     ["Instagram", "Naver Blog", "YouTube Shorts", "TikTok", "카카오톡"],
+        #     default=["Instagram"]
+        # )
         
-        period_start = st.date_input("기간 시작", date.today())
-        period_end = st.date_input("기간 종료", date.today() + timedelta(days=30))
+        # period_start = st.date_input("기간 시작", date.today())
+        # period_end = st.date_input("기간 종료", date.today() + timedelta(days=30))
 
     # 분석 시작 버튼 - task_type이 있을 때만 활성화
     if task_type:
-        analyze_button = st.button("🚀 분석 시작", type="primary", use_container_width=True)
+        analyze_button = st.button("🚀 분석 시작", type="primary", width='stretch')
     else:
         st.warning("⚠️ 입력을 작성해주세요.")
         analyze_button = False
@@ -650,11 +822,12 @@ if analyze_button and selected_store_id:
                 target_store_id=selected_store_id,
                 target_store_name=selected_store_name,
                 task_type=task_type,
-                user_query=user_input,  # 사용자 쿼리 전달 (날씨/행사 키워드 분석용)
+                user_query=user_input,
                 target_market_id=target_market_id,
                 period_start=str(period_start) if period_start else None,
                 period_end=str(period_end) if period_end else None,
-                content_channels=content_channels
+                content_channels=content_channels,
+                collect_mode=selected_collect_mode  # 사용자 선택 모드 전달
             )
             
             st.success("✅ 분석 완료!")
@@ -679,7 +852,7 @@ if analyze_button and selected_store_id:
                         # 포지셔닝 맵
                         fig = create_positioning_map(stp)
                         if fig:
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width='stretch')
                         
                         # 클러스터 정보
                         st.markdown("### 군집 정보")
@@ -952,19 +1125,47 @@ if analyze_button and selected_store_id:
                         # 🎨 무드보드 섹션
                         st.markdown("### 🎨 무드보드")
                         mood_board = content_guide.get('mood_board', [])
+                        mood_board_en = content_guide.get('mood_board_en', mood_board)  # 폴백: 한글 사용
+
+                        # 키워드 나열 (항상 표시)
                         if mood_board:
-                            # 무드보드 키워드를 박스로 표시
+                            # 무드보드 한글 키워드를 박스로 표시
                             cols = st.columns(min(len(mood_board), 5))
                             for i, keyword in enumerate(mood_board):
                                 with cols[i % 5]:
                                     st.info(f"**{keyword}**")
+
+                            # 무드보드 이미지 그리드 (3열)
+                            cols = st.columns(3)
+                            for i, (keyword_ko, keyword_en) in enumerate(zip(mood_board, mood_board_en)):
+                                with cols[i % 3]:
+                                    # 영어 키워드로 이미지 검색
+                                    with st.spinner(f"'{keyword_ko}' 이미지 로딩 중..."):
+                                        image_data = fetch_moodboard_image(keyword_en, orientation="portrait")
+
+                                    if image_data:
+                                        # 이미지 표시
+                                        st.image(image_data["img"], width='stretch')
+                                        # 한글 키워드와 사진작가 정보
+                                        st.caption(f"**{keyword_ko}**")
+                                        st.caption(f"📷 [{image_data['photographer']}]({image_data['photographer_url']})")
+                                    else:
+                                        # 이미지 로딩 실패 시 한글 키워드만 표시
+                                        st.info(f"**{keyword_ko}**")
                         else:
                             st.write("무드보드 정보 없음")
 
                         # 브랜드 톤앤매너
                         st.markdown("### 🎭 브랜드 톤앤매너")
                         brand_tone = content_guide.get('brand_tone', 'N/A')
-                        st.success(f"**{brand_tone}**")
+                        
+                        # 쉼표로 분리
+                        tone_keywords = [k.strip() for k in brand_tone.split(',')]
+
+                        cols = st.columns(min(len(tone_keywords), 5))
+                        for i, keyword in enumerate(tone_keywords):
+                            with cols[i % 5]:
+                                st.success(f"**{keyword}**")
 
                         # 타겟 고객
                         st.markdown("### 🎯 타겟 고객")
@@ -1057,7 +1258,6 @@ else:
         <ul>
             <li>날씨 기반 전술 (비, 폭염, 한파)</li>
             <li>이벤트 연계 프로모션</li>
-            <li>긴급 Flash Sale</li>
         </ul>
     </div>
     

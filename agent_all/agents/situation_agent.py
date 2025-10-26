@@ -112,16 +112,17 @@ def collect_situation_info(
     period_start: str,
     period_end: str,
     user_query: Optional[str] = None,
-    collect_mode: str = "both"  # "both", "weather_only", "event_only"
+    collect_mode: str = "weather_only"  # "weather_only", "event_only" (both 제거)
 ) -> Dict[str, Any]:
     """
-    상황 정보 수집 (선택적 병렬)
+    상황 정보 수집 (사용자 선택 모드 기반)
 
     Args:
         market_id: 상권 ID (e.g., "M45", "강남")
         period_start: 시작일 (YYYY-MM-DD)
         period_end: 종료일 (YYYY-MM-DD)
         user_query: 사용자 쿼리 (선택)
+        collect_mode: "weather_only" 또는 "event_only" (사용자가 Streamlit에서 선택)
 
     Returns:
         {
@@ -129,7 +130,9 @@ def collect_situation_info(
             "summary": str,
             "signals": List[Dict],
             "citations": List[str],
-            "assumptions": List[str]
+            "assumptions": List[str],
+            "event_count": int,
+            "weather_count": int
         }
     """
 
@@ -139,56 +142,51 @@ def collect_situation_info(
             "summary": "입력 누락: market_id/start/end 필요",
             "signals": [],
             "citations": [],
-            "assumptions": []
+            "assumptions": [],
+            "event_count": 0,
+            "weather_count": 0
         }
 
-    # 🔥 사용자 쿼리 기반 자동 모드 판단
-    if user_query and collect_mode == "both":
-        query_lower = user_query.lower()
-        weather_keywords = ["날씨", "비", "폭염", "한파", "기온", "강수", "우천", "weather", "rain", "snow"]
-        event_keywords = ["행사", "이벤트", "축제", "팝업", "전시", "공연", "마켓", "event", "festival"]
+    # 유효한 모드 검증
+    if collect_mode not in ["weather_only", "event_only"]:
+        print(f"   ⚠️ 잘못된 collect_mode: {collect_mode}, 기본값 weather_only 사용")
+        collect_mode = "weather_only"
 
-        has_weather = any(kw in query_lower for kw in weather_keywords)
-        has_event = any(kw in query_lower for kw in event_keywords)
-
-        if has_weather and not has_event:
-            collect_mode = "weather_only"
-            print(f"   🌤️  사용자 쿼리 분석: 날씨 전용 모드")
-        elif has_event and not has_weather:
-            collect_mode = "event_only"
-            print(f"   📅 사용자 쿼리 분석: 행사 전용 모드")
+    # 선택된 모드 로그
+    mode_emoji = "🌤️" if collect_mode == "weather_only" else "📅"
+    mode_name = "날씨 전용" if collect_mode == "weather_only" else "행사 전용"
+    print(f"   {mode_emoji} 수집 모드: {mode_name}")
 
     store = {"market_id": market_id}
     period = {"start": period_start, "end": period_end}
 
-    # 선택적 병렬 실행
-    events, wx = None, None
-    futures = {}
+    # 단일 모드 실행 (병렬 불필요)
+    events = None
+    wx = None
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        if collect_mode in ["both", "event_only"]:
-            futures[ex.submit(_call_events, market_id, period_start, period_end, user_query)] = "events"
+    if collect_mode == "event_only":
+        try:
+            events = _call_events(market_id, period_start, period_end, user_query)
+        except Exception as e:
+            events = {
+                "has_valid_signal": False,
+                "summary": f"이벤트 수집 실패({e})",
+                "signals": [],
+                "citations": [],
+                "assumptions": []
+            }
 
-        if collect_mode in ["both", "weather_only"]:
-            futures[ex.submit(_call_weather, user_query, store, period)] = "weather"
-
-        for fut in as_completed(futures):
-            tag = futures[fut]
-            try:
-                res = fut.result()
-            except Exception as e:
-                res = {
-                    "has_valid_signal": False,
-                    "summary": f"{tag} 수집 실패({e})",
-                    "signals": [],
-                    "citations": [],
-                    "assumptions": []
-                }
-
-            if tag == "events":
-                events = res
-            else:
-                wx = res
+    elif collect_mode == "weather_only":
+        try:
+            wx = _call_weather(user_query, store, period)
+        except Exception as e:
+            wx = {
+                "has_valid_signal": False,
+                "summary": f"날씨 수집 실패({e})",
+                "signals": [],
+                "citations": [],
+                "assumptions": []
+            }
 
     # 안전 가드
     events = events or {"signals": [], "citations": [], "assumptions": [], "summary": None}
