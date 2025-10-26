@@ -20,7 +20,7 @@ import typing as Any
 
 # 메인 시스템 임포트
 sys.path.append(str(Path(__file__).parent))
-from marketing_multiagent_system import (
+from marketing_system import (
     run_marketing_system,
     PrecomputedPositioningLoader
 )
@@ -41,7 +41,7 @@ def classify_user_intent(user_input: str) -> IntentClassification:
     """사용자 입력 의도 분류 (초고속)"""
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash-exp",
+        model="gemini-2.5-flash",
         temperature=0.0,
         max_output_tokens=150
     )
@@ -667,10 +667,9 @@ if analyze_button and selected_store_id:
             
             if task_type == "종합_전략_수립":
                 # === 종합 전략: 4개 탭 (원본 구조 유지) ===
-                tab1, tab2, tab3, tab4 = st.tabs([
+                tab1, tab2, tab3 = st.tabs([
                     "📊 STP 분석",
                     "🎯 전략 카드 (3개)",  # 🔥 변경: 전략 수립 → 전략 카드
-                    "📅 실행 계획",
                     "📄 최종 보고서"
                 ])
                 
@@ -702,10 +701,10 @@ if analyze_button and selected_store_id:
                         
                         with col1:
                             st.markdown(render_strategy_card(strategy_cards[0], 1), unsafe_allow_html=True)
-                        
+
                         with col2:
                             st.markdown(render_strategy_card(strategy_cards[1], 2), unsafe_allow_html=True)
-                        
+
                         with col3:
                             st.markdown(render_strategy_card(strategy_cards[2], 3), unsafe_allow_html=True)
                         
@@ -735,17 +734,13 @@ if analyze_button and selected_store_id:
                                 st.write(strategy.promotion)
                 
                 with tab3:
-                    st.markdown("## 📅 실행 계획")
-                    st.markdown(result.get('execution_plan', '계획 없음'))
-                
-                with tab4:
                     st.markdown("## 📄 최종 보고서")
                     st.download_button(
                         "📥 보고서 다운로드",
                         data=result.get('final_report', ''),
                         file_name=f"report_{selected_store_name}.txt"
                     )
-                    st.markdown(result.get('final_report', '보고서 없음'))
+                    st.markdown(result.get('final_report', '보고서 없음'), unsafe_allow_html=True)
             
             elif task_type == "상황_전술_제안":
                 # === 상황 전술: 2개 탭 ===
@@ -866,7 +861,7 @@ if analyze_button and selected_store_id:
                     tactical_card = result.get('tactical_card') or result.get('final_report', '')
 
                     if tactical_card:
-                        st.markdown(tactical_card)
+                        st.markdown(tactical_card, unsafe_allow_html=True)
                     else:
                         st.warning("전술 카드가 생성되지 않았습니다.")
             
@@ -958,7 +953,7 @@ if analyze_button and selected_store_id:
                 
                 with tab2:
                     st.markdown("## 📄 보고서")
-                    st.markdown(result.get('final_report', '보고서 없음'))
+                    st.markdown(result.get('final_report', '보고서 없음'), unsafe_allow_html=True)
         
         except Exception as e:
             st.error(f"❌ 오류 발생: {e}")
