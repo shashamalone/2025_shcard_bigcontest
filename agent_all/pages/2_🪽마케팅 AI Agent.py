@@ -17,10 +17,29 @@ import sys
 from datetime import date, timedelta
 import typing as Any
 
+# GRPC 및 로깅 경고 메시지 완전히 무시
+import os
+import warnings
+
+# GRPC 관련 경고 완전 제거
+os.environ['GRPC_VERBOSITY'] = 'ERROR'
+os.environ['GRPC_TRACE'] = ''
+os.environ['GRPC_VERBOSITY'] = 'NONE'
+os.environ['GLOG_minloglevel'] = '3'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+# Python warnings 무시
+warnings.filterwarnings('ignore')
+
+# stderr 리다이렉션 (ALTS 경고 완전 차단)
+import sys as _sys
+import io
+_original_stderr = _sys.stderr
+_sys.stderr = io.StringIO()
 
 # 메인 시스템 임포트
-sys.path.append(str(Path(__file__).parent))
-from marketing_system import (
+sys.path.append(str(Path(__file__).parent.parent))
+from agents.marketing_system import (
     run_marketing_system,
     PrecomputedPositioningLoader
 )
@@ -320,87 +339,66 @@ def create_positioning_map(stp_output):
 
 def render_strategy_card(card, card_index):
     """
-    🔥 전략 카드 HTML 렌더링
-    
+    🔥 전략 카드 Markdown 렌더링
+
     Args:
         card: StrategyCard 객체
         card_index: 카드 번호 (1, 2, 3)
     """
-    priority_class = f"priority-{card.priority.lower()}"
-    
-    # 데이터 근거 태그
-    evidence_html = ""
-    for ev in card.data_evidence[:5]:  # 상위 5개만
-        evidence_html += f"<span class='evidence-tag'>{ev}</span>"
-    
-    card_html = f"""
-    <div class='strategy-card'>
-        <div class='card-title'>
-            전략 카드 {card_index}: {card.title}
-        </div>
-        
-        <span class='card-priority {priority_class}'>
-            우선순위: {card.priority}
-        </span>
-        
-        <div class='card-concept'>
-            💡 <strong>포지셔닝 컨셉</strong><br>
-            {card.positioning_concept}
-        </div>
-        
-        <div class='card-section'>
-            <div class='card-section-title'>
-                📦 Product
-            </div>
-            <div class='card-section-content'>
-                {card.strategy_4p.get('product', 'N/A')}
-            </div>
-        </div>
-        
-        <div class='card-section'>
-            <div class='card-section-title'>
-                💰 Price
-            </div>
-            <div class='card-section-content'>
-                {card.strategy_4p.get('price', 'N/A')}
-            </div>
-        </div>
-        
-        <div class='card-section'>
-            <div class='card-section-title'>
-                🏪 Place
-            </div>
-            <div class='card-section-content'>
-                {card.strategy_4p.get('place', 'N/A')}
-            </div>
-        </div>
-        
-        <div class='card-section'>
-            <div class='card-section-title'>
-                📢 Promotion
-            </div>
-            <div class='card-section-content'>
-                {card.strategy_4p.get('promotion', 'N/A')}
-            </div>
-        </div>
-        
-        <div class='card-outcome'>
-            📈 <strong>예상 효과</strong><br>
-            {card.expected_outcome}
-        </div>
-        
-        <div class='card-section'>
-            <div class='card-section-title'>
-                📊 데이터 근거
-            </div>
-            <div style='margin-top: 0.5rem;'>
-                {evidence_html}
-            </div>
-        </div>
-    </div>
-    """
-    
-    return card_html
+    # 우선순위 이모지
+    priority_emoji = {
+        "high": "🔴",
+        "medium": "🟡",
+        "low": "🟢"
+    }
+    emoji = priority_emoji.get(card.priority.lower(), "⚪")
+
+    # strategy_4p 안전하게 가져오기
+    product = card.strategy_4p.get('product', 'N/A')
+    price = card.strategy_4p.get('price', 'N/A')
+    place = card.strategy_4p.get('place', 'N/A')
+    promotion = card.strategy_4p.get('promotion', 'N/A')
+
+    # 데이터 근거 리스트
+    evidence_list = "\n".join([f"- {ev}" for ev in card.data_evidence[:5]])
+
+    # Markdown 텍스트 생성
+    markdown_text = f"""
+### 🎯 전략 카드 {card_index}: {card.title}
+
+{emoji} **우선순위**: {card.priority}
+
+---
+
+#### 💡 포지셔닝 컨셉
+> {card.positioning_concept}
+
+---
+
+#### 📦 Product
+{product}
+
+#### 💰 Price
+{price}
+
+#### 🏪 Place
+{place}
+
+#### 📢 Promotion
+{promotion}
+
+---
+
+#### 📈 예상 효과
+**{card.expected_outcome}**
+
+---
+
+#### 📊 데이터 근거
+{evidence_list}
+"""
+
+    return markdown_text
 
 # ============================================================================
 # Main App
@@ -640,7 +638,7 @@ with st.sidebar:
 
 if analyze_button and selected_store_id:
     
-    with st.spinner(f"📊 {task_type} 진행 중..."):
+    with st.spinner(f"📊 {task_type} 진행 중...(예상 소요 시간: 1분~1분30초)"):
         
         try:
             # 사용자 입력이 있으면 표시
@@ -698,21 +696,98 @@ if analyze_button and selected_store_id:
                     if strategy_cards and len(strategy_cards) >= 3:
                         # 🔥 3개 카드 가로 배치
                         col1, col2, col3 = st.columns(3)
-                        
+
                         with col1:
-                            st.markdown(render_strategy_card(strategy_cards[0], 1), unsafe_allow_html=True)
+                            st.markdown(render_strategy_card(strategy_cards[0], 1))
 
                         with col2:
-                            st.markdown(render_strategy_card(strategy_cards[1], 2), unsafe_allow_html=True)
+                            st.markdown(render_strategy_card(strategy_cards[1], 2))
 
                         with col3:
-                            st.markdown(render_strategy_card(strategy_cards[2], 3), unsafe_allow_html=True)
-                        
+                            st.markdown(render_strategy_card(strategy_cards[2], 3))
+
                         # 선택된 전략 표시
                         st.markdown("---")
                         selected_strategy = result.get('selected_strategy')
                         if selected_strategy:
                             st.success(f"✅ **추천 전략**: {selected_strategy.title} (우선순위: {selected_strategy.priority})")
+
+                        # 📊 데이터 근거 상세 정보
+                        st.markdown("---")
+                        with st.expander("📊 전략 수립 데이터 근거 및 분석 과정"):
+                            st.markdown("### 🔍 분석에 활용된 데이터셋")
+
+                            # STP 분석 데이터
+                            stp = result.get('stp_output')
+                            if stp:
+                                st.markdown("#### 1️⃣ STP 분석 데이터")
+                                st.markdown(f"""
+- **포지셔닝 맵 데이터**: PC1 (성장성), PC2 (경쟁 강도) 기반 시장 세분화
+- **클러스터 수**: {len(stp.cluster_profiles)}개 경쟁 그룹 식별
+- **현재 위치**: PC1={stp.store_current_position.pc1_score:.2f}, PC2={stp.store_current_position.pc2_score:.2f}
+- **소속 클러스터**: {stp.store_current_position.cluster_name}
+                                """)
+
+                            # 전략 카드별 데이터 근거
+                            st.markdown("#### 2️⃣ 전략 카드별 데이터 근거")
+
+                            for i, card in enumerate(strategy_cards, 1):
+                                st.markdown(f"**전략 카드 {i}: {card.title}**")
+                                st.markdown("데이터 근거:")
+                                for ev in card.data_evidence:
+                                    st.markdown(f"- {ev}")
+                                st.markdown("")
+
+                            # 사용된 데이터 소스
+                            st.markdown("#### 3️⃣ 활용 데이터 소스")
+                            st.markdown("""
+- **가맹점 세분화 데이터**: `store_segmentation_final_re.csv`
+  - 가맹점 기본 정보, 매출, 상권 특성
+  - PC1/PC2 점수, 클러스터 ID
+
+- **PCA 분석 결과**: `pca_components_by_industry.csv`
+  - 업종별 주성분 가중치
+  - 각 축의 의미 해석
+
+- **클러스터 프로파일**: `kmeans_clusters_by_industry.csv`
+  - 업종별 경쟁 그룹 특성
+  - 각 클러스터 평균 위치 및 특징
+
+- **4P 매핑 데이터**: 가맹점 특성 기반 전략 데이터베이스
+  - Product/Price/Place/Promotion 전략 템플릿
+  - 상권 & 고객 특성별 맞춤 전략
+                            """)
+
+                            # 전략 선택 로직
+                            st.markdown("#### 4️⃣ 전략 선택 기준")
+                            st.markdown("""
+1. **우선순위 결정 요소**:
+   - PC1 점수 (성장 잠재력)
+   - PC2 점수 (경쟁 환경)
+   - 상권 특성 (유동인구, 1인 가구 비율 등)
+   - 업종 트렌드
+
+2. **4P 전략 매핑**:
+   - 데이터 기반 제품/가격/유통/프로모션 전략 도출
+   - 유사 성공 사례 벤치마킹
+   - 타겟 고객 세분화
+
+3. **예상 효과 산출**:
+   - 과거 유사 전략 성과 데이터 참조
+   - 업종 평균 대비 개선 여지 분석
+                            """)
+
+                            # 원본 데이터 확인 (디버그용)
+                            st.markdown("---")
+                            st.markdown("#### 🛠️ 원본 데이터 구조 (개발자용)")
+
+                            card_idx = st.selectbox(
+                                "카드 선택",
+                                options=[0, 1, 2],
+                                format_func=lambda x: f"카드 {x+1}: {strategy_cards[x].title}"
+                            )
+
+                            st.json(strategy_cards[card_idx].model_dump())
                     
                     else:
                         st.warning("⚠️ 전략 카드가 생성되지 않았습니다.")

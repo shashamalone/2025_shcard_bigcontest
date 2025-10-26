@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field
 # ============================================================================
 
 MODEL_NAME = "gemini-2.5-flash"
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
 
 # ============================================================================
 # 1. Data Models
