@@ -826,11 +826,12 @@ if analyze_button and selected_store_id:
             ]
         },
         "상황_전술_제안": {
-            "time": "30초 ~ 1분",
+            "time": "2분 ~ 2분 30초",
             "steps": [
                 "▶️ **Market Analysis**: STP 분석 (~5초)",
-                "▶️ **Situation Collection**: 날씨/이벤트 정보 수집 (~10초)",
-                "▶️ **Tactical Generation**: 긴급 전술 카드 생성 (~20초)"
+                "▶️ **4P Strategy**: 데이터 기반 전략 카드 3개 생성 (~30초)",
+                "▶️ **Situation Collection**: 날씨/이벤트 정보 수집 (~30초)",
+                "▶️ **Tactical Generation**: 긴급 전술 카드 생성 (~80초)"
             ]
         },
         "콘텐츠_생성_가이드": {
@@ -1114,10 +1115,11 @@ if analyze_button and selected_store_id:
                             st.markdown("#### 2️⃣ 전략 카드별 데이터 근거")
 
                             for i, card in enumerate(strategy_cards, 1):
-                                with st.expander(f"전략 {i}: {card.title}"):
-                                    st.markdown("**데이터 근거:**")
-                                    for evidence in card.data_evidence:
-                                        st.caption(f"- {evidence}")
+                                st.markdown(f"**전략 {i}: {card.title}**")
+                                st.markdown("데이터 근거:")
+                                for evidence in card.data_evidence:
+                                    st.markdown(f"- {evidence}")
+                                st.markdown("")
                     else:
                         st.warning("전략 카드가 생성되지 않았습니다.")
 
