@@ -919,7 +919,7 @@ def strategy_4p_agent(state: StrategyPlanningState) -> StrategyPlanningState:
     if user_query and user_query.strip() and user_query != f"Analyze {stp.store_current_position.store_name}":
         print(f"[DEBUG] ✅ user_query 프롬프트에 추가됨: '{user_query}'")
         user_query_section = f"""
-# 🎯 사용자 요청 사항
+# 사용자 요청 사항
 **"{user_query}"**
 
 위 사용자 요청을 전략 카드에 최우선으로 반영하세요.
@@ -1157,18 +1157,20 @@ def generate_comprehensive_report_node(state: SupervisorState) -> SupervisorStat
     state['next'] = END
     return state
 
+
+
+
+
+
+
+
+
 def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
     """ 상황 전술 카드 생성 (날씨 + 행사 정보 반영)"""
     print("\n[Tactical Card] 상황 전술 카드 생성 중...")
 
     # 상황 정보 수집 (사용자 쿼리 기반 선택적 수집)
     situation_info = None
-
-    # 디버깅: state 값 확인
-    print(f"\n[DEBUG] target_market_id: {state.get('target_market_id')}")
-    print(f"[DEBUG] period_start: {state.get('period_start')}")
-    print(f"[DEBUG] period_end: {state.get('period_end')}")
-    print(f"[DEBUG] user_query: {state.get('user_query')}")
 
     if state.get('target_market_id') and state.get('period_start') and state.get('period_end'):
         try:
@@ -1202,8 +1204,27 @@ def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
                 print(f"      - 키 목록: {list(situation_info.keys())}")
                 print(f"      - 이벤트 수: {situation_info.get('event_count', 0)}")
                 print(f"      - 날씨 수: {situation_info.get('weather_count', 0)}")
-                print(f"      - events 데이터: {situation_info.get('events', {})}")
-                print(f"      - weather 데이터: {situation_info.get('weather', {})}")
+                print(f"      - has_valid_signal: {situation_info.get('has_valid_signal')}")
+                print(f"      - summary: {situation_info.get('summary', 'N/A')}")
+
+                # signals 상세 출력
+                signals = situation_info.get('signals', [])
+                print(f"      - signals 개수: {len(signals)}")
+                for i, sig in enumerate(signals[:3], 1):  # 상위 3개만
+                    print(f"        [{i}] type={sig.get('type')}, signal_type={sig.get('signal_type')}")
+                    print(f"            description={sig.get('description', 'N/A')[:80]}...")
+                    print(f"            relevance={sig.get('relevance')}, reason={sig.get('reason', 'N/A')[:60]}...")
+
+                # citations 출력
+                citations = situation_info.get('citations', [])
+                print(f"      - citations 개수: {len(citations)}")
+                for i, cite in enumerate(citations[:2], 1):  # 상위 2개만
+                    print(f"        [{i}] {cite}")
+
+                # 원본 데이터 샘플
+                print(f"      - events 원본 데이터 (키만): {list(situation_info.get('events', {}).keys())}")
+                print(f"      - weather 원본 데이터 (키만): {list(situation_info.get('weather', {}).keys())}")
+
             print(f"   ✓ 상황 시그널: 이벤트={situation_info.get('event_count', 0)}, 날씨={situation_info.get('weather_count', 0)}")
         except Exception as e:
             import traceback
@@ -1218,26 +1239,115 @@ def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
     stp = state['stp_output']
     selected = state['selected_strategy']
 
+    # 🔥 사용자 요청 분석
+    user_query = state.get('user_query', '')
+    has_user_query = user_query and user_query.strip() and user_query != f"Analyze {state.get('target_store_name', '')}"
+
+    # 상황 정보 분석
+    has_situation = situation_info and situation_info.get('has_valid_signal')
+    has_events = situation_info and situation_info.get('event_count', 0) > 0
+    has_weather = situation_info and situation_info.get('weather_count', 0) > 0
+
     # 상황 정보 포맷팅
-    if situation_info and situation_info.get('has_valid_signal'):
+    if has_situation:
         situation_summary = situation_info['summary']
         signals_text = "\n".join([
-            f"  - {sig.get('type', 'N/A')}: {sig.get('description', 'N/A')}"
-            for sig in situation_info.get('signals', [])[:5]  # 상위 5개만
+            f"  - **{sig.get('type', 'N/A')}**: {sig.get('description', 'N/A')}"
+            for sig in situation_info.get('signals', [])[:5]
         ])
         citations_text = "\n".join([
             f"  - {cite}"
-            for cite in situation_info.get('citations', [])[:3]  # 상위 3개만
+            for cite in situation_info.get('citations', [])[:3]
         ])
     else:
         situation_summary = f"상권={state.get('target_market_id', 'N/A')}, 기간={state.get('period_start')} ~ {state.get('period_end')}"
-        signals_text = "상황 정보 없음"
+        signals_text = "상황 정보 없음 - 가맹점 데이터 기반 전략을 우선 고려"
         citations_text = "N/A"
 
-    prompt = f"""
-# ⚡ 즉시 실행 전술 카드
+    # 가맹점 상세 정보
+    store_position = stp.store_current_position
+    store_cluster = next((c for c in stp.cluster_profiles if c.cluster_name == store_position.cluster_name), None)
 
-## 📍 상황 분석
+    # PC 축 해석 가져오기
+    pc1_label = stp.pc_axis_interpretation.get('PC1', PCAxisInterpretation(axis='PC1', interpretation='특성 1')).interpretation
+    pc2_label = stp.pc_axis_interpretation.get('PC2', PCAxisInterpretation(axis='PC2', interpretation='특성 2')).interpretation
+
+    store_detail = f"""
+- **가맹점명**: {state['target_store_name']}
+- **업종**: {store_position.industry}
+- **시장 포지션**: PC1={store_position.pc1_score:.2f} ({pc1_label}), PC2={store_position.pc2_score:.2f} ({pc2_label})
+- **소속 군집**: {store_position.cluster_name}
+- **군집 특성**: {store_cluster.characteristics if store_cluster else 'N/A'}
+- **군집 매장 수**: {store_cluster.store_count if store_cluster else 'N/A'}개
+"""
+
+    # 🔥 상황별 특화 지침 (날씨/이벤트 구분)
+    situation_guide = ""
+
+    if has_events and has_weather:
+        situation_guide = """
+
+## 🔄 통합 상황 활용
+**날씨와 이벤트를 동시에 고려**하여 시너지 효과를 극대화하세요:
+- 날씨에 따른 이벤트 참여 방식 조정
+- 이벤트 전후 날씨 변화 대응
+- 복합 프로모션 기회 발굴
+
+### ⏰ 실행 타임라인
+- 이벤트 시작 전 (D-3~D-1): [날씨 예보 고려한 준비사항]
+- 이벤트 진행 중: [실시간 날씨 대응]
+- 이벤트 종료 후 (D+1~D+3): [후속 조치]
+"""
+    elif has_events:
+        situation_guide = """
+
+## 📅 이벤트 중심 전략
+**주변 행사/이벤트를 최대한 활용**하세요:
+- 예상 방문객 동선 분석 및 유입 전략
+- 이벤트 참여자 타겟팅
+- 시간대별 차별화 전략
+
+### ⏰ 실행 타임라인
+- 이벤트 시작 전 (D-3~D-1): [준비사항]
+- 이벤트 진행 중: [실시간 대응]
+- 이벤트 종료 후 (D+1~D+3): [후속 조치]
+"""
+    elif has_weather:
+        situation_guide = """
+
+## 🌤️ 날씨 기반 전략
+**기상 조건에 최적화된 마케팅**을 수행하세요:
+
+### 필수 고려사항
+1. **메뉴/상품 전략**: 날씨별 추천 (더울 때 시원한 메뉴, 추울 때 따뜻한 메뉴, 비올 때 실내 메뉴)
+2. **공간 활용**: 실내/야외 공간 활용도 조정 (테라스, 포장마차, 배달 등)
+3. **프로모션**: 날씨 기반 할인/이벤트 (맑은 날 야외석 할인, 비오는 날 배달 무료)
+4. **운영 조정**: 배달/포장 비중 조정
+
+### 🌡️ 수집된 기상 정보 활용
+**반드시 아래 정보를 전술에 반영하세요**:
+- 평균 기온 → 메뉴/상품 선택
+- 강수 확률 → 실내외 운영 전략
+- 날씨 추세 → 프로모션 타이밍
+"""
+    else:
+        situation_guide = """
+
+## 🏪 가맹점 중심 전략
+상황 정보가 없으므로 **가맹점의 강점과 업종 특성에 집중**하세요.
+"""
+
+    prompt = f"""당신은 데이터 기반 마케팅 전략가입니다. **가맹점의 현재 상황과 특성을 중심으로**, 상황 시그널을 부가적으로 활용하여 즉시 실행 가능한 전술을 제시하세요.
+
+## 🏪 가맹점 분석 (핵심)
+{store_detail}
+
+## 🎯 기본 전략 방향
+**{selected.title}**
+- 포지셔닝: {selected.positioning_concept}
+- 예상 효과: {selected.expected_outcome}
+
+## 📍 현재 상황 정보 (참고)
 {situation_summary}
 
 ### 주요 시그널
@@ -1245,45 +1355,46 @@ def generate_tactical_card_node(state: SupervisorState) -> SupervisorState:
 
 ### 참고 자료
 {citations_text}
-
-## 🏪 가맹점 정보
-- 이름: {state['target_store_name']}
-- 업종: {stp.store_current_position.industry}
-- 현재 위치: PC1={stp.store_current_position.pc1_score:.2f}, PC2={stp.store_current_position.pc2_score:.2f}
-
-## 🎯 추천 전술
-**{selected.title}**
-
-### 핵심 액션 (Top 3)
-**위의 상황 시그널(날씨, 행사)을 반드시 고려하여** 즉시 실행 가능한 액션을 제시하세요:
-1. [액션 1 - 상황 반영]
-2. [액션 2 - 상황 반영]
-3. [액션 3 - 상황 반영]
-
-### 💰 예상 예산
-- 항목별 예산 (상황 대응 비용 포함)
-
-### 📊 예상 효과
-{selected.expected_outcome}
-
-### ⏰ 실행 타임라인
-- D-Day: [시작 - 상황 모니터링]
-- D+3일: [중간 점검 - 상황 변화 대응]
-- D+7일: [최종 평가]
+{situation_guide}
+{'## 🎯 사용자 요청 사항 (최우선)\n**"' + user_query + '"**\n\n⚠️ **중요**: 위 사용자 요청을 전술의 핵심으로 삼으세요.\n- 현재 상황 시그널과 다를 수 있지만, **사용자 요청을 최우선**으로 반영하세요.\n- 예: 현재 날씨가 맑음이지만 사용자가 "폭염 대응"을 요청했다면, 폭염 시나리오 기반 전술을 제시하세요.\n- 사용자 요청에 특정 타겟/채널/방향이 명시되어 있다면 반드시 포함하세요.\n' if has_user_query else ''}
 
 ---
-**중요**: 날씨와 주변 행사 정보를 전술에 **구체적으로 반영**하세요.
-예: "비 예보 → 우산 대여 서비스", "주변 축제 → 콜라보 프로모션"
+
+## 💡 요청사항
+
+**우선순위:**
+{'1. **🎯 사용자 요청 최우선 반영** - 위 사용자 요청사항을 전술의 핵심으로 삼으세요\n2. **가맹점 특성 활용** - 가맹점 정보를 구체적으로 반영\n3. **상황 시그널 참고** - ' + ('날씨 정보를 부가적으로 활용' if has_weather else '이벤트 정보를 부가적으로 활용' if has_events else '가맹점 데이터 중심') if has_user_query else '1. **가맹점 특성 활용** - 위 가맹점 정보를 구체적으로 반영\n2. **상황 시그널 반영** - ' + ('날씨 조건을 활용' if has_weather else '이벤트 정보를 활용' if has_events else '가맹점 데이터에 집중')}
+
+### 핵심 액션 (Top 3)
+{'**사용자 요청을 최우선으로 반영한** 구체적이고 즉시 실행 가능한 액션:' if has_user_query else '**가맹점 특성을 최우선으로, 상황 시그널을 부가적으로 고려한** 구체적이고 즉시 실행 가능한 액션:'}
+
+**각 액션 형식:**
+1. **[액션명]**
+   {'- **사용자 요청 반영**: 사용자 요청("' + user_query + '")을 어떻게 실현하는가?\n   - **가맹점 활용**: 어떤 가맹점 특성을 활용하는가?\n   - **실행 방법**: 구체적으로 무엇을 어떻게 할 것인가?\n   - **상황 시그널**: ' + ('현재 날씨와 다를 수 있지만 사용자 요청 기준으로 전략 수립' if has_weather else '현재 이벤트와 다를 수 있지만 사용자 요청 기준으로 전략 수립' if has_events else '사용자 요청 중심 전략') if has_user_query else '- **가맹점 활용**: 어떤 가맹점 특성/강점을 활용하는가?\n   - **실행 방법**: 구체적으로 무엇을 어떻게 할 것인가?\n   - **상황 연계**: ' + ('날씨 정보(기온, 강수확률 등)를 어떻게 활용하는가?' if has_weather else '이벤트 정보를 어떻게 활용하는가?' if has_events else '(가맹점 데이터 기반)')}
+   - **예상 효과**: 정량적 기대 효과
+
+### 💰 예상 예산
+항목별 예산 (총 100만원 이하 권장):
+- [액션 1]: XX만원
+- [액션 2]: XX만원
+- [액션 3]: XX만원
+- **총 예산**: XX만원
+
+### 📊 예상 효과
+- 매출 증대율: XX%
+- 신규 고객: XX%
+- 재방문율: XX%p
+
+---
+**핵심 원칙**:
+- ✅ 가맹점 특성 최우선 반영
+- ✅ 업종({store_position.industry}) 특성 고려
+- ✅ 군집({store_position.cluster_name}) 특성 활용
+- {'✅ 날씨 정보(기온 ' + str(situation_info.get('signals', [{}])[0].get('details', {}).get('temp_mean', 'N/A')) + '°C, 강수확률 ' + str(situation_info.get('signals', [{}])[0].get('details', {}).get('pop_mean', 'N/A')) + '%)를 구체적으로 활용' if has_weather else '✅ 이벤트 정보를 구체적으로 활용' if has_events else '⚠️ 가맹점 데이터 중심'}
 """
 
     response = llm.invoke(prompt)
     state['tactical_card'] = response.content.strip()
-    state['final_report'] = state['tactical_card']  # UI 호환성
-    state['situation'] = situation_info  # 상황 정보 저장 (Streamlit 호환)
-
-    print(f"[DEBUG] state['situation'] 저장 완료: {type(state.get('situation'))}")
-    if isinstance(state.get('situation'), dict):
-        print(f"[DEBUG] situation 키: {state['situation'].keys()}")
     state['next'] = END
     return state
 
@@ -1325,7 +1436,6 @@ def generate_content_guide_node(state: SupervisorState) -> SupervisorState:
             "strategy_4p": strategy_4p,
             "targeting_positioning": stp.target_cluster_name if hasattr(stp, 'target_cluster_name') else "타겟 분석",
             "market_customer_analysis": f"타겟 군집: {stp.target_cluster_name}" if hasattr(stp, 'target_cluster_name') else "",
-            "situation": state.get('situation_context', {}),
             "user_query": state.get('user_query', ''),  # 🔥 사용자 요청 전달
             "selected_channels": state.get('content_channels', ["Instagram", "Naver Blog"]),  # 🔥 채널 선택 전달
             "log": []
@@ -1538,7 +1648,6 @@ def create_super_graph() -> StateGraph:
             "task_type": s["task_type"],
             "stp_output": s["stp_output"],
             "store_raw_data": s.get("store_raw_data"),
-            "situation": s.get("situation"),
             "target_market_id": s.get("target_market_id"),
             "period_start": s.get("period_start"),
             "period_end": s.get("period_end"),
@@ -1641,7 +1750,6 @@ def run_marketing_system(
         "period_start": period_start,
         "period_end": period_end,
         "collect_mode": collect_mode,  # 사용자 선택 모드 추가
-        "situation": None,  # collect_situation_info() 결과
         "situation_context": None,
 
         # 콘텐츠 생성용
@@ -1675,7 +1783,7 @@ def run_marketing_system(
     print(f"✅ 완료 - 소요시간: {elapsed:.2f}초")
     print("=" * 80)
 
-    return {
+    result = {
         "task_type": task_type,
         "stp_output": final_state.get('stp_output'),
         "strategy_cards": final_state.get('strategy_cards', []),
@@ -1683,8 +1791,12 @@ def run_marketing_system(
         "execution_plan": final_state.get('execution_plan', ''),
         "final_report": final_state.get('final_report', ''),
         "tactical_card": final_state.get('tactical_card'),
-        "content_guide": final_state.get('content_guide')
+        "content_guide": final_state.get('content_guide'),
     }
+
+    print(f"[DEBUG] 🔥 return할 result 키: {list(result.keys())}")
+
+    return result
 
 # ============================================================================
 # 9. CLI
@@ -1731,8 +1843,21 @@ if __name__ == "__main__":
     period_start = None
     period_end = None
     content_channels = None
+    collect_mode = "weather_only"  # 기본값
 
     if task_type == "상황_전술_제안":
+        print("\n" + "=" * 60)
+        print("🌤️ 상황 분석 모드를 선택하세요:")
+        print("=" * 60)
+        print("1. 날씨 기반 (weather_only)")
+        print("2. 이벤트 기반 (event_only)")
+        print("=" * 60)
+
+        mode_choice = input("\n선택 (1-2, 기본값=1): ").strip() or "1"
+        collect_mode = "weather_only" if mode_choice == "1" else "event_only"
+        mode_display = "🌤️ 날씨 기반" if collect_mode == "weather_only" else "📅 이벤트 기반"
+        print(f"\n✅ 선택된 모드: {mode_display}\n")
+
         target_market_id = input("📍 상권 ID (예: 강남, 기본값=성수동): ").strip() or "성수동"
         period_start = input("📅 시작일 (YYYY-MM-DD, 기본값=오늘): ").strip() or str(date.today())
         period_end = input("📅 종료일 (YYYY-MM-DD, 기본값=+7일): ").strip() or str(date.today() + timedelta(days=7))
@@ -1762,7 +1887,8 @@ if __name__ == "__main__":
         target_market_id=target_market_id,
         period_start=period_start,
         period_end=period_end,
-        content_channels=content_channels
+        content_channels=content_channels,
+        collect_mode=collect_mode  # 🔥 날씨/이벤트 모드 전달
     )
 
     print(f"\n📊 결과:")

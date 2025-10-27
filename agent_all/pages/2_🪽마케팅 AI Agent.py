@@ -994,7 +994,7 @@ if analyze_button and selected_store_id:
 
                             # 원본 데이터 확인 (디버그용)
                             st.markdown("---")
-                            st.markdown("#### 🛠️ 원본 데이터 구조 (개발자용)")
+                            st.markdown("#### 🛠️ 원본 데이터 구조 확인")
 
                             card_idx = st.selectbox(
                                 "카드 선택",
@@ -1033,127 +1033,104 @@ if analyze_button and selected_store_id:
                     st.markdown(result.get('final_report', '보고서 없음'), unsafe_allow_html=True)
             
             elif task_type == "상황_전술_제안":
+                
                 # === 상황 전술: 2개 탭 ===
                 tab1, tab2 = st.tabs(["📡 상황 분석", "⚡ 전술 카드"])
-                
+
                 with tab1:
-                    st.markdown("## 📡 상황 분석")
-                    situation = result.get('situation', {})
+                    st.markdown("## 📡 상황 분석 및 긴급 전술")
 
-                    if situation and isinstance(situation, dict):
-                        # 요약 정보
-                        summary = situation.get('summary', 'N/A')
-                        st.info(f"**요약**: {summary}")
-
-                        # 상황 메타 정보 및 수집 모드 감지
-                        event_count = situation.get('event_count', 0)
-                        weather_count = situation.get('weather_count', 0)
-
-                        # 수집 모드 자동 판별
-                        if event_count > 0 and weather_count == 0:
-                            collect_mode = "📅 행사 전용"
-                        elif weather_count > 0 and event_count == 0:
-                            collect_mode = "🌤️ 날씨 전용"
-                        elif event_count > 0 and weather_count > 0:
-                            collect_mode = "🔄 통합 분석"
-                        else:
-                            collect_mode = "⚠️ 신호 없음"
-
-                        col1, col2, col3, col4 = st.columns(4)
-                        with col1:
-                            st.metric("수집 모드", collect_mode)
-                        with col2:
-                            st.metric("📅 이벤트", event_count)
-                        with col3:
-                            st.metric("🌤️ 날씨", weather_count)
-                        with col4:
-                            valid_signal = "✅ 유효" if situation.get('has_valid_signal') else "⚠️ 없음"
-                            st.metric("유효 신호", valid_signal)
-
-                        # 신호 카드 (유형별로 분류 표시)
-                        signals = situation.get('signals', [])
-                        if signals:
-                            # 신호를 유형별로 분류
-                            event_signals = [s for s in signals if s.get('signal_type') == 'event']
-                            weather_signals = [s for s in signals if s.get('signal_type') == 'weather']
-
-                            if event_signals:
-                                st.markdown("### 📅 이벤트 신호")
-                                for i, sig in enumerate(event_signals, 1):
-                                    with st.expander(f"📅 이벤트 {i}: {sig.get('description', 'N/A')[:50]}...", expanded=(i==1)):
-                                        st.markdown(f"**설명**: {sig.get('description', 'N/A')}")
-                                        if sig.get('details'):
-                                            details = sig['details']
-                                            if details.get('url'):
-                                                st.markdown(f"**URL**: [{details['url']}]({details['url']})")
-                                            if details.get('expected_visitors'):
-                                                st.metric("예상 방문객", f"{details['expected_visitors']:,}명")
-                                        if sig.get('relevance'):
-                                            st.progress(float(sig['relevance']))
-                                            st.caption(f"관련도: {sig['relevance']:.2f}")
-
-                            if weather_signals:
-                                st.markdown("### 🌤️ 날씨 신호")
-                                for i, sig in enumerate(weather_signals, 1):
-                                    with st.expander(f"🌤️ 날씨 {i}: {sig.get('description', 'N/A')[:50]}...", expanded=(i==1)):
-                                        st.markdown(f"**설명**: {sig.get('description', 'N/A')}")
-                                        if sig.get('details'):
-                                            details = sig['details']
-                                            # 날씨 상세 정보 표시
-                                            detail_cols = st.columns(3)
-                                            if details.get('pop_mean') is not None:
-                                                with detail_cols[0]:
-                                                    st.metric("평균 강수확률", f"{details['pop_mean']:.0f}%")
-                                            if details.get('rain_mm') is not None:
-                                                with detail_cols[1]:
-                                                    st.metric("강수량", f"{details['rain_mm']:.1f}mm")
-                                            if details.get('tmax_overall') is not None:
-                                                with detail_cols[2]:
-                                                    st.metric("최고기온", f"{details['tmax_overall']:.1f}°C")
-                                            if details.get('tmin_overall') is not None:
-                                                with detail_cols[2]:
-                                                    st.metric("최저기온", f"{details['tmin_overall']:.1f}°C")
-                                        if sig.get('relevance'):
-                                            st.progress(float(sig['relevance']))
-                                            st.caption(f"관련도: {sig['relevance']:.2f}")
-                                        # 마케팅 제안 이유
-                                        if sig.get('reason'):
-                                            st.success(f"💡 **마케팅 기회**: {sig['reason']}")
-                        else:
-                            st.warning("수집된 신호 없음")
-
-                        # 참고 자료
-                        citations = situation.get('citations', [])
-                        if citations:
-                            st.markdown("### 📚 참고 자료")
-                            for i, cite in enumerate(citations[:5], 1):
-                                st.caption(f"{i}. {cite}")
-                    else:
-                        st.warning("상황 분석 정보가 없습니다.")
-                
-                with tab2:
-                    st.markdown("## ⚡ 긴급 전술 카드")
-
-                    # 상황 정보 기반 배너 표시
-                    situation = result.get('situation', {})
-                    if situation and isinstance(situation, dict):
-                        event_count = situation.get('event_count', 0)
-                        weather_count = situation.get('weather_count', 0)
-
-                        if event_count > 0 and weather_count == 0:
-                            st.info("📅 **행사 기반 전술**: 이 전략은 주변 이벤트 정보를 반영하여 생성되었습니다.")
-                        elif weather_count > 0 and event_count == 0:
-                            st.info("🌤️ **날씨 기반 전술**: 이 전략은 기상 예보를 반영하여 생성되었습니다.")
-                        elif event_count > 0 and weather_count > 0:
-                            st.success("🔄 **통합 전술**: 이 전략은 날씨와 행사 정보를 모두 반영하여 생성되었습니다.")
-
-                    # 전술 카드 표시
-                    tactical_card = result.get('tactical_card') or result.get('final_report', '')
+                    # final_report를 마크다운으로 표시
+                    tactical_card = result.get('tactical_card', '')
 
                     if tactical_card:
                         st.markdown(tactical_card, unsafe_allow_html=True)
                     else:
-                        st.warning("전술 카드가 생성되지 않았습니다.")
+                        st.warning("상황 분석 정보가 생성되지 않았습니다.")
+
+                with tab2:
+                    st.markdown("## ⚡ 데이터 기반 전략 카드")
+
+                    # STP 분석 표시
+                    stp = result.get('stp_output')
+
+                    if stp:
+                        st.markdown("### 📊 STP 분석")
+
+                        # 포지셔닝 맵
+                        fig = create_positioning_map(stp)
+                        if fig:
+                            st.plotly_chart(fig, use_container_width=True)
+
+                        # 클러스터 정보
+                        st.markdown("### 🏘️ 군집 정보")
+                        for cluster in stp.cluster_profiles:
+                            st.info(f"**{cluster.cluster_name}**: {cluster.characteristics}")
+                    else:
+                        st.warning("STP 데이터가 없습니다.")
+
+                    st.markdown("---")
+
+                    # 3가지 전략 카드 표시
+                    st.markdown("### 🎯 데이터 기반 3가지 전략 카드")
+
+                    strategy_cards = result.get('strategy_cards', [])
+
+                    if strategy_cards and len(strategy_cards) >= 3:
+                        # 🔥 3개 카드 가로 배치
+                        col1, col2, col3 = st.columns(3)
+
+                        with col1:
+                            st.markdown(render_strategy_card(strategy_cards[0], 1))
+
+                        with col2:
+                            st.markdown(render_strategy_card(strategy_cards[1], 2))
+
+                        with col3:
+                            st.markdown(render_strategy_card(strategy_cards[2], 3))
+
+                        # 선택된 전략 표시
+                        st.markdown("---")
+                        selected_strategy = result.get('selected_strategy')
+                        if selected_strategy:
+                            st.success(f"✅ **추천 전략**: {selected_strategy.title} (우선순위: {selected_strategy.priority})")
+
+                        # 📊 데이터 근거 상세 정보
+                        st.markdown("---")
+                        with st.expander("📊 전략 수립 데이터 근거 및 분석 과정"):
+                            st.markdown("### 🔍 분석에 활용된 데이터셋")
+
+                            # STP 분석 데이터
+                            if stp:
+                                st.markdown("#### 1️⃣ STP 분석 데이터")
+                                st.markdown(f"""
+- **포지셔닝 맵 데이터**: PC1 (성장성), PC2 (경쟁 강도) 기반 시장 세분화
+- **클러스터 수**: {len(stp.cluster_profiles)}개 경쟁 그룹 식별
+- **현재 위치**: PC1={stp.store_current_position.pc1_score:.2f}, PC2={stp.store_current_position.pc2_score:.2f}
+- **소속 클러스터**: {stp.store_current_position.cluster_name}
+                                """)
+
+                            # 전략 카드별 데이터 근거
+                            st.markdown("#### 2️⃣ 전략 카드별 데이터 근거")
+
+                            for i, card in enumerate(strategy_cards, 1):
+                                with st.expander(f"전략 {i}: {card.title}"):
+                                    st.markdown("**데이터 근거:**")
+                                    for evidence in card.data_evidence:
+                                        st.caption(f"- {evidence}")
+                    else:
+                        st.warning("전략 카드가 생성되지 않았습니다.")
+
+                # 🔍 디버깅: result 전체 구조 확인
+                with st.expander("🔍 result 데이터 구조", expanded=False):
+                    st.write("**result 키 목록:**", list(result.keys()))
+                    st.write("**situation 타입:**", type(result.get('situation')))
+                    if result.get('situation'):
+                        st.write("**situation 내용:**", result.get('situation'))
+                    st.write("**tactical_card 존재:**", bool(result.get('tactical_card')))
+                    st.write("**전체 result:**", result)
+
+
             
             else:  # 콘텐츠_생성_가이드
                 # === 콘텐츠 가이드: 2개 탭 ===
