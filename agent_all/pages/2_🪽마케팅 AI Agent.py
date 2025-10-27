@@ -416,7 +416,7 @@ def create_positioning_map(stp_output):
                      f"PC2: {cluster.pc2_mean:.2f}"
 
         # 텍스트에도 characteristics 추가
-        display_text = f"{cluster.cluster_name}<br><sub>{cluster.characteristics}</sub>"
+        display_text = f"{cluster.cluster_name}<br>{cluster.characteristics}"
 
         fig.add_trace(go.Scatter(
             x=[cluster.pc1_mean],
