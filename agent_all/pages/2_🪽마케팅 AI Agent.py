@@ -392,6 +392,18 @@ def create_positioning_map(stp_output):
     if not stp_output or not hasattr(stp_output, 'cluster_profiles'):
         return None
 
+    # 🔥 PC 축 해석 가져오기 (동적 라벨)
+    pc1_label = "PC1"
+    pc2_label = "PC2"
+
+    if hasattr(stp_output, 'pc_axis_interpretation') and stp_output.pc_axis_interpretation:
+        if 'PC1' in stp_output.pc_axis_interpretation:
+            pc1_interp = stp_output.pc_axis_interpretation['PC1']
+            pc1_label = f"PC1 ({pc1_interp.interpretation})" if hasattr(pc1_interp, 'interpretation') else "PC1"
+        if 'PC2' in stp_output.pc_axis_interpretation:
+            pc2_interp = stp_output.pc_axis_interpretation['PC2']
+            pc2_label = f"PC2 ({pc2_interp.interpretation})" if hasattr(pc2_interp, 'interpretation') else "PC2"
+
     fig = go.Figure()
     colors = px.colors.qualitative.Set3
 
@@ -459,7 +471,7 @@ def create_positioning_map(stp_output):
     fig.update_layout(
         title='시장 포지셔닝 맵',
         xaxis=dict(
-            title='PC1 (성장성) →',
+            title=f'{pc1_label} →',
             range=[-x_max, x_max],
             zeroline=True,
             zerolinewidth=2,
@@ -468,7 +480,7 @@ def create_positioning_map(stp_output):
             showgrid=True
         ),
         yaxis=dict(
-            title='PC2 (경쟁 강도) ↑',
+            title=f'{pc2_label} ↑',
             range=[-y_max, y_max],
             zeroline=True,
             zerolinewidth=2,
