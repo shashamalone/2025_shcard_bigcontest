@@ -9,22 +9,26 @@ from plotly.subplots import make_subplots
 import numpy as np
 from pathlib import Path
 
+@st.cache_data(ttl=3600)  # 1시간 캐싱
 def load_data():
-    """데이터 로드"""
+    """데이터 로드 (캐싱 최적화)"""
     try:
         base_path = Path(__file__).parent.parent.parent
-        flow_df = pd.read_csv(base_path / 'data/유동인구.csv')
-        rent_df = pd.read_csv(base_path / 'data/임대료.csv')
-        integrated_df = pd.read_csv(base_path / 'data/통합_제공데이터.csv')
+
+        # low_memory=False로 DtypeWarning 방지
+        flow_df = pd.read_csv(base_path / 'data/유동인구.csv', low_memory=False)
+        rent_df = pd.read_csv(base_path / 'data/임대료.csv', low_memory=False)
+        integrated_df = pd.read_csv(base_path / 'data/통합_제공데이터.csv', low_memory=False)
+
         # 기준일ID를 날짜로 변환
         if '기준일ID' in flow_df.columns:
             flow_df['기준일자'] = pd.to_datetime(flow_df['기준일ID'].astype(str), format='%Y%m%d', errors='coerce')
-        
+
         # 기준년월을 날짜로 변환 (다양한 형식 지원)
         if '기준년월' in integrated_df.columns:
             # ISO8601 형식도 지원 (YYYY-MM-DD, YYYY-MM 등)
             integrated_df['기준년월'] = pd.to_datetime(integrated_df['기준년월'], format='ISO8601', errors='coerce')
-        
+
         return flow_df, rent_df, integrated_df
     except Exception as e:
         st.error(f"데이터 로드 실패: {e}")
@@ -392,7 +396,7 @@ def create_sales_trend_comparison(df, store_id):
             r=store_vals.tolist() + [store_vals[0]],
             theta=labels + [labels[0]],
             fill='toself',
-            name=f'가맹점 {store_id}',
+            name=f'현재 매장',
             line=dict(color='#66B0FF', width=3),
             fillcolor='rgba(102, 176, 255, 0.3)',
             hovertemplate='<b>%{theta}</b><br>우리 매장: %{r:.1f}<extra></extra>'
@@ -1255,7 +1259,7 @@ def create_competitive_position(df, store_id):
       - 전체 평균({avg_industry:.1f}%) 대비 {values[0] - avg_industry:+.1f}%p
     
     - **상권 내 순위**: {values[1]:.1f}% → {eval_area[0]} ({eval_area[2]})
-      - 전체 평균({avg_area:.1f}%) 대비 {values[1] - avg_area:+.1f}%p
+      - 전체 평균({avg_area:.1f}%) ���비 {values[1] - avg_area:+.1f}%p
     
     💡 **해석 가이드**
     - 순위 비율 30% 이하: 상위권 (우수)
@@ -1339,17 +1343,38 @@ def main():
     with col2:
         # 가맹점 선택
         available_stores = integrated_df['가맹점구분번호'].dropna().unique()
-        
+
         if len(available_stores) == 0:
             st.error("❌ 유효한 가맹점 데이터가 없습니다.")
             return
-        
-        selected_store = st.selectbox(
+
+        # 🚀 가맹점 정보 매핑 생성 - 대폭 최적화
+        # groupby만 사용 (불필요한 isin 필터링 제거)
+        store_info_df = integrated_df.groupby('가맹점구분번호')[['가맹점명', '업종', '상권']].first()
+
+        # 벡터화된 문자열 포맷팅 (반복문 제거)
+        store_info_df['display'] = (
+            store_info_df['가맹점명'].fillna('알 수 없음') + ' (' +
+            store_info_df['업종'].fillna('일반') + ') - ' +
+            store_info_df['상권'].fillna('미분류')
+        )
+
+        # 매핑 딕셔너리 생성 (O(1) 조회를 위해)
+        store_display_map = store_info_df['display'].to_dict()
+        display_to_store_map = {v: k for k, v in store_display_map.items()}  # 역방향 매핑
+
+        # 표시용 리스트 (available_stores 순서 유지)
+        store_options = [store_display_map.get(store_id, str(store_id)) for store_id in available_stores]
+
+        selected_display = st.selectbox(
             "🏪 가맹점",
-            options=available_stores,
+            options=store_options,
             index=0,
             help="분석할 가맹점과 분석기간을 선택하세요"
         )
+
+        # 선택된 표시명에서 실제 가맹점 ID 역추출 (O(1) 조회)
+        selected_store = display_to_store_map.get(selected_display)
         
         # 분석 기간 선택
         available_months = sorted(integrated_df['기준년월'].dropna().unique())
@@ -1620,7 +1645,7 @@ def main():
     
     st.markdown("---")
     
-    # 인사이트
+    # 인���이트
     st.markdown("## 💡 주요 인사이트")
     
     insight_col1, insight_col2, insight_col3 = st.columns(3)
