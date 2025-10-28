@@ -204,21 +204,39 @@ def content_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # 🔥 사용자 요청 섹션 추가
     user_query_section = ""
-    if user_query and user_query.strip() and user_query != f"Analyze {store_name}":
+    has_user_query = user_query and user_query.strip() and user_query != f"Analyze {store_name}"
+
+    if has_user_query:
         user_query_section = f"""
-# 🎯 사용자 요청 사항
+# 사용자 요청 사항 (최우선 반영)
 **"{user_query}"**
 
-이 요청을 콘텐츠 가이드에 최우선으로 반영하세요:
-- 특정 톤/스타일 언급 시 → brand_tone 및 채널 전략에 반영
-- 특정 타겟 언급 시 → target_audience 및 카피 예시에 반영
-- 특정 콘텐츠 형식 언급 시 → post_format 및 visual_direction에 반영
-- 키워드/해시태그 요청 시 → 해당 키워드를 우선 포함
+⚠️ **중요**: 위 사용자 요청을 모든 콘텐츠 전략의 **핵심**으로 삼으세요.
+
+**반영 우선순위:**
+1. **🎯 사용자 요청**: 위 요청 내용을 최우선으로 반영
+2. **📊 전략 데이터**: 전략팀 제안 및 시장 분석 데이터 활용
+3. **📋 기본 템플릿**: 채널별 표준 가이드라인 참고
+
+**구체적 반영 방법:**
+- 특정 채널 언급 시 (예: "인스타그램", "블로그") → 해당 채널에만 집중, 다른 채널 생략 가능
+- 특정 톤/스타일 요청 시 (예: "친근하게", "전문적으로") → brand_tone 및 모든 카피에 반영
+- 특정 타겟 언급 시 (예: "20대", "직장인") → target_audience 및 카피/해시태그에 맞춤 반영
+- 특정 콘텐츠 형식 요청 시 (예: "릴스", "후기") → post_format 및 visual_direction 우선 반영
+- 특정 키워드 요청 시 → 해시태그 및 무드보드에 우선 포함
+- 특정 메시지/테마 언급 시 → 모든 카피 예시에 해당 테마 반영
+
+**예시:**
+- "인스타그램 릴스에 특화해줘" → Instagram 채널만 생성, post_format은 "릴스 중심"
+- "친근하고 MZ 세대에게 어필" → brand_tone = "친근한, 트렌디한, 캐주얼한", target_audience = "MZ세대 (2030)"
+- "프리미엄 이미지 강조" → brand_tone = "세련된, 고급스러운", mood_board에 "프리미엄", "엘레강스" 포함
 
 ---
 """
 
     user_prompt = f"""
+{user_query_section}
+
 # 가맹점 정보
 - 가맹점명: {store_name}
 - 업종: {industry}
@@ -236,11 +254,9 @@ def content_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 # 현재 상황
 {situation_summary}
 
-{user_query_section}
-
 ---
 
-위 정보를 바탕으로 **사용자가 선택한 채널에 맞는 콘텐츠 가이드**를 생성하세요.
+{'⚠️ **위 사용자 요청을 최우선으로 반영**하여 콘텐츠 가이드를 생성하세요.' if has_user_query else '위 정보를 바탕으로 콘텐츠 가이드를 생성하세요.'}
 
 **선택된 채널**: {', '.join(selected_channels)}
 
@@ -259,18 +275,22 @@ def content_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 }}
 
 **중요:**
-1. **반드시 선택된 채널만 생성** ({', '.join(selected_channels)})
-2. 카피 예시는 구체적으로 (실제 문장 형태로 작성)
-3. 해시태그는 채널당 최소 10개 이상
-4. 시각적 방향성은 촬영 가이드로 활용 가능하게 구체적으로
-5. **무드보드 키워드 생성 규칙**:
+{'1. **🎯 사용자 요청을 최우선 반영**: 위 "사용자 요청 사항" 섹션의 내용을 모든 필드에 우선 반영하세요' if has_user_query else '1. 사용자가 선택한 채널에 맞춰 콘텐츠를 생성하세요'}
+2. **반드시 선택된 채널만 생성** ({', '.join(selected_channels)})
+3. 카피 예시는 구체적으로 (실제 문장 형태로 작성)
+4. 해시태그는 채널당 최소 10개 이상
+5. 시각적 방향성은 촬영 가이드로 활용 가능하게 구체적으로
+6. **무드보드 키워드 생성 규칙**:
    - **mood_board (한글)**: 사용자에게 표시할 키워드 (예: "따뜻한 조명", "신선한 식재료", "아늑한 분위기")
    - **mood_board_en (영어)**: Pexels API 이미지 검색용 키워드 (예: "warm lighting", "fresh ingredients", "cozy atmosphere")
    - 한글과 영어 키워드는 1:1 매칭되어야 함
    - 각각 5-6개 제공
    - 시각적 분위기를 구체적으로 표현
-6. **브랜드 톤앤매너는 쉼표로 구분된 키워드 형식** (예: "친근한, 활기찬, 전문적인")
-7. 각 채널의 특성을 명확히 반영 (틱톡은 빠른 편집, 블로그는 SEO 중심 등)
+   {'- **사용자 요청 키워드를 우선 반영**: 사용자가 특정 키워드를 요청한 경우 무드보드에 반드시 포함' if has_user_query else ''}
+7. **브랜드 톤앤매너는 쉼표로 구분된 키워드 형식** (예: "친근한, 활기찬, 전문적인")
+   {'- **사용자 요청 톤 우선 반영**: 사용자가 특정 톤을 요청한 경우 반드시 최우선 반영' if has_user_query else ''}
+8. 각 채널의 특성을 명확히 반영 (틱톡은 빠른 편집, 블로그는 SEO 중심 등)
+   {'- **사용자 요청 채널/형식 우선**: 사용자가 특정 채널이나 형식을 강조한 경우 해당 채널에 집중' if has_user_query else ''}
 """
 
     # ========================================

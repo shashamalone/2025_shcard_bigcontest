@@ -1178,7 +1178,7 @@ if analyze_button and selected_store_id:
 
                                     if image_data:
                                         # 이미지 표시
-                                        st.image(image_data["img"], width='stretch')
+                                        st.image(image_data["img"], use_container_width=True)
                                         # 한글 키워드와 사진작가 정보
                                         st.caption(f"**{keyword_ko}**")
                                         st.caption(f"📷 [{image_data['photographer']}]({image_data['photographer_url']})")

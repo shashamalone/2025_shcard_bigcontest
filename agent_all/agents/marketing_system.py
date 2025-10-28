@@ -1410,10 +1410,6 @@ def generate_content_guide_node(state: SupervisorState) -> SupervisorState:
         stp = state.get('stp_output') if state else None
         selected = state.get('selected_strategy') if state else None
 
-        # # 디버깅
-        # print(f"   🔍 추출된 stp: {stp}")
-        # print(f"   🔍 추출된 selected: {selected}")
-
         if not stp or not selected:
             raise ValueError(f"STP={bool(stp)} (타입: {type(stp)}), Strategy={bool(selected)} (타입: {type(selected)}) - 필수 데이터 누락")
 
@@ -1436,7 +1432,7 @@ def generate_content_guide_node(state: SupervisorState) -> SupervisorState:
             "strategy_4p": strategy_4p,
             "targeting_positioning": stp.target_cluster_name if hasattr(stp, 'target_cluster_name') else "타겟 분석",
             "market_customer_analysis": f"타겟 군집: {stp.target_cluster_name}" if hasattr(stp, 'target_cluster_name') else "",
-            "user_query": state.get('user_query', ''),  # 🔥 사용자 요청 전달
+            "user_query": state.get('user_query', ''),  # 사용자 요청 전달
             "selected_channels": state.get('content_channels', ["Instagram", "Naver Blog"]),  # 🔥 채널 선택 전달
             "log": []
         }
