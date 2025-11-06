@@ -366,15 +366,3 @@ r = requests.get(..., timeout=60)
 - [ ] 업종별 템플릿 확장
 - [ ] 성과 추적 (GA4)
 
----
-
-## 📞 지원
-
-- GitHub Issues: 버그 리포트
-- Email: support@marketing-ai.com
-
----
-
-**버전**: 2.0.0 (Final Integrated)  
-**최종 업데이트**: 2025-10-24  
-**라이선스**: MIT
