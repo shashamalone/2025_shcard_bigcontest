@@ -379,7 +379,7 @@ print(result_2)
 | **역할** | [AI Engineer/기획] | [AI Engineer] | [Data Analyst] | [기획/PM] |
 | :---: | :---: | :---: | :---: | :---: |
 | **이미지** | <img src="https://avatars.githubusercontent.com/shashamalone" width="150px;" alt=""> | <img src="https://avatars.githubusercontent.com/SeoyeongKim12" width="150px;" alt=""> | <img src="https://avatars.githubusercontent.com/keyong2523" width="150px;" alt=""> | <img src="https://avatars.githubusercontent.com/ryejinn" width="150px;" alt=""> |
-| **이름** | [김이정](https://github.com/shashamalone)) | [김서영](https://github.com/SeoyeongKim12) | [이은경](https://github.com/keyong2523) | [안례진](https://github.com/ryejinn) |
+| **이름** | [김이정](https://github.com/shashamalone) | [김서영](https://github.com/SeoyeongKim12) | [이은경](https://github.com/keyong2523) | [안례진](https://github.com/ryejinn) |
 
 
 
