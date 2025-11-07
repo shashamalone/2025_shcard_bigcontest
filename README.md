@@ -12,8 +12,8 @@
 * **팀원 구성:** [총 4명]
 * **🚀 데모 영상 / 실행 결과 (GIF):** [[Streamlit 실행 화면]](https://2025bigcon-bizfriends.streamlit.app/%EB%A7%88%EC%BC%80%ED%8C%85_AI_Agent)
 * **🏆 발표자료 (pdf):** [[AI데이터활용분야_장사친구팀_발표자료]](https://github.com/shashamalone/2025_shcard_bigcontest/blob/main/AI%EB%8D%B0%EC%9D%B4%ED%84%B0%ED%99%9C%EC%9A%A9%EB%B6%84%EC%95%BC_%EC%9E%A5%EC%82%AC%EC%B9%9C%EA%B5%AC%ED%8C%80.pdf)
-* **🤖 핵심 모델 (Core Model):** [예: Google Gemini 1.5 Pro, Llama 3]
-* **🛠️ 주요 기술 (Key Tech):** [예: LangGraph, Streamlit, Tavily API]
+* **🤖 핵심 모델 (Core Model):** Google Gemini 2.5 flash
+* **🛠️ 주요 기술 (Key Tech):** LangGraph, Streamlit, Tavily API
 
 </br>
 
@@ -376,7 +376,10 @@ print(result_2)
 
 ## 😎 팀원 소개
 
-| **역할** | [AI Engineer] | [AI Engineer] | [Data Analyst] | [기획] |
+| **역할** | [AI Engineer/기획] | [AI Engineer] | [Data Analyst] | [기획/PM] |
 | :---: | :---: | :---: | :---: | :---: |
-| **이미지** | [GitHub 프로필이미지] | [GitHub 프로필이미지] | [GitHub 프로필이미지] | [GitHub 프로필이미지] |
-| **이름** | [김이정](GitHub 프로필 링크) | 김서영 | 이은경 | 안례진 |
+| **이미지** | <img src="https://avatars.githubusercontent.com/shashamalone" width="150px;" alt=""> | <img src="https://avatars.githubusercontent.com/SeoyeongKim12" width="150px;" alt=""> | <img src="https://avatars.githubusercontent.com/keyong2523" width="150px;" alt=""> | <img src="https://avatars.githubusercontent.com/ryejinn" width="150px;" alt=""> |
+| **이름** | [김이정](https://github.com/shashamalone)) | [김서영](https://github.com/SeoyeongKim12) | [이은경](https://github.com/keyong2523) | [안례진](https://github.com/ryejinn) |
+
+
+
