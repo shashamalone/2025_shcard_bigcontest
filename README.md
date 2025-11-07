@@ -1,5 +1,4 @@
-# Marketing MultiAgent System - Final Version
-# 🌊 [장사친구 마케팅 에이전트] Marketing MultiAgent System
+# 🤖[장사친구 마케팅 에이전트] Marketing MultiAgent System
 
 > [프로젝트 한 줄 소개 / AI 핵심 기능 요약]
 > Google Gemini와 LangGraph를 활용한 자율 마케팅 전략 수립 및 콘텐츠 생성 시스템
