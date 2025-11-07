@@ -8,12 +8,12 @@
 ## 📌 프로젝트 개요
 
 * **프로젝트명:** 장사친구 마케팅 에이전트
-* **개발기간:** [YYYY.MM.DD] ~ [YYYY.MM.DD]
-* **팀원 구성:** [총 4명]
+* **개발기간:** 2025.09.24 ~ 2025.10.24
+* **팀원 구성:** 총 4명
 * **🚀 데모 영상 / 실행 결과 (GIF):** [[Streamlit 실행 화면]](https://2025bigcon-bizfriends.streamlit.app/%EB%A7%88%EC%BC%80%ED%8C%85_AI_Agent)
 * **🏆 발표자료 (pdf):** [[AI데이터활용분야_장사친구팀_발표자료]](https://github.com/shashamalone/2025_shcard_bigcontest/blob/main/AI%EB%8D%B0%EC%9D%B4%ED%84%B0%ED%99%9C%EC%9A%A9%EB%B6%84%EC%95%BC_%EC%9E%A5%EC%82%AC%EC%B9%9C%EA%B5%AC%ED%8C%80.pdf)
-* **🤖 핵심 모델 (Core Model):** Google Gemini 2.5 flash
-* **🛠️ 주요 기술 (Key Tech):** LangGraph, Streamlit, Tavily API
+* **🤖 핵심 모델 :** Google Gemini 2.5 flash
+* **🛠️ 주요 기술 :** LangGraph, Streamlit, Tavily API
 
 </br>
 
